@@ -22,7 +22,7 @@ use uuid::Uuid;
 fn is_duplicate_key(error: &sqlx::Error) -> bool {
     matches!(
         error,
-        sqlx::Error::Database(database) if database.code().as_deref() == Some("1062")
+        sqlx::Error::Database(database) if database.is_unique_violation()
     )
 }
 
@@ -112,15 +112,16 @@ pub struct Page<T> {
 
 fn db(error: sqlx::Error) -> StorageError {
     match &error {
-        sqlx::Error::Database(database) => match database.code().as_deref() {
-            Some("1062") => StorageError::Conflict {
+        sqlx::Error::Database(database) if database.is_unique_violation() => {
+            StorageError::Conflict {
                 entity: "unique constraint",
-            },
-            Some("1451" | "1452" | "3819") => {
-                StorageError::InvalidData("database constraint rejected the value".into())
             }
-            _ => StorageError::Database(error),
-        },
+        }
+        sqlx::Error::Database(database)
+            if database.is_foreign_key_violation() || database.is_check_violation() =>
+        {
+            StorageError::InvalidData("database constraint rejected the value".into())
+        }
         _ => StorageError::Database(error),
     }
 }

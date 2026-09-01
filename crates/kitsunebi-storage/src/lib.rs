@@ -111,7 +111,7 @@ fn application_error(error: StorageError) -> ApplicationError {
 }
 
 fn is_duplicate_key(error: &sqlx::Error) -> bool {
-    matches!(error, sqlx::Error::Database(database) if database.code().as_deref() == Some("1062"))
+    matches!(error, sqlx::Error::Database(database) if database.is_unique_violation())
 }
 
 /// MySQL is the production implementation of the application persistence port.

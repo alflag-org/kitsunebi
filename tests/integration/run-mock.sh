@@ -95,6 +95,7 @@ if kind == "plan":
              "target":{"kind":"cluster", "value":cluster}, "domain_revision":0,
              "observed_state_hashes":[observed, before_digest],
              "expected_file_hashes":[before_digest],
+             "expected_artifact_hashes":[],
              "steps":[
                  {"action":{"kind":"execution_lifecycle", "value":{
                      "binding_id":binding, "action":"start",
@@ -106,7 +107,8 @@ if kind == "plan":
                      "expected_before_digest":before_digest,
                      "content":{"digest":staged_digest, "size":int(staged_size)},
                      "classification":"mutable_config"}}}
-             ], "backup_required":False, "expires_at":int(expiry)}
+             ], "backup_required":False, "backup_references":[],
+             "rollback_instructions":[], "expires_at":int(expiry)}
 elif kind == "approve":
     value = {"session_id":sys.argv[2], "plan_id":sys.argv[3], "plan_hash":sys.argv[4]}
 elif kind == "apply":

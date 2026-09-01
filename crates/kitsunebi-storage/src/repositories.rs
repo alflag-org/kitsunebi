@@ -3617,7 +3617,7 @@ impl MySqlStorage {
             });
         }
         let mut tx = self.pool().begin().await.map_err(db)?;
-        let service_exists: Option<Uuid> =
+        let service_exists: Option<String> =
             sqlx::query_scalar("SELECT id FROM services WHERE id = ? FOR UPDATE")
                 .bind(text(service_id.as_uuid()))
                 .fetch_optional(&mut *tx)
@@ -3626,7 +3626,7 @@ impl MySqlStorage {
         if service_exists.is_none() {
             return Err(StorageError::NotFound { entity: "service" });
         }
-        let direct_owner: Option<Uuid> = sqlx::query_scalar(
+        let direct_owner: Option<String> = sqlx::query_scalar(
             "SELECT id FROM services WHERE id = ? AND access_policy_id = ? FOR UPDATE",
         )
         .bind(text(service_id.as_uuid()))
@@ -4098,12 +4098,14 @@ impl MySqlStorage {
             .ok_or_else(|| invalid("change session target"))
             .and_then(|value| Uuid::parse_str(value).map_err(|error| invalid(error.to_string())))?;
         let session_cluster = kitsunebi_domain::ClusterId::from_uuid(session_cluster);
-        let service_id: Uuid = sqlx::query_scalar("SELECT service_id FROM clusters WHERE id = ?")
+        let service_id: String = sqlx::query_scalar("SELECT service_id FROM clusters WHERE id = ?")
             .bind(text(session_cluster.as_uuid()))
             .fetch_optional(&mut *tx)
             .await
             .map_err(db)?
             .ok_or(StorageError::NotFound { entity: "cluster" })?;
+        let service_id = Uuid::parse_str(&service_id)
+            .map_err(|error| invalid(format!("cluster service: {error}")))?;
         let resolved_cluster = self
             .resolve_plan_target_cluster(
                 plan.target,

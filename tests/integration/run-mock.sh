@@ -20,13 +20,17 @@ body_file=$tmp_dir/body
 header_file=$tmp_dir/headers
 
 request() {
+  request_context=unknown
+  for argument do
+    request_context=$argument
+  done
   response_status=$(curl --silent --show-error --retry 3 --retry-delay 1 --retry-connrefused \
     --max-time 20 --output "$body_file" --dump-header "$header_file" \
     --write-out '%{http_code}' "$@")
 }
 expect_status() {
   [ "$response_status" = "$1" ] || {
-    echo "unexpected HTTP status: expected $1, got $response_status" >&2
+    echo "unexpected HTTP status for $request_context: expected $1, got $response_status" >&2
     sed -n '1,80p' "$body_file" >&2
     exit 1
   }

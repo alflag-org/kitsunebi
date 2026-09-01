@@ -305,14 +305,18 @@ async fn persistence_invariants_are_enforced() {
         .bind_access_policy_to_service(policy.id, other_service.id)
         .await
         .expect("shared policy binding");
-    assert!(matches!(
-        storage
-            .update_access_policy_for_service(&policy, service.id, 1)
-            .await,
-        Err(StorageError::Conflict {
-            entity: "access policy owner"
-        })
-    ));
+    let shared_policy_update = storage
+        .update_access_policy_for_service(&policy, service.id, 1)
+        .await;
+    assert!(
+        matches!(
+            &shared_policy_update,
+            Err(StorageError::Conflict {
+                entity: "access policy owner"
+            })
+        ),
+        "unexpected shared-policy update result: {shared_policy_update:?}"
+    );
     assert_eq!(
         storage
             .resource_service_scope(

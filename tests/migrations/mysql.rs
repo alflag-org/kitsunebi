@@ -6,7 +6,7 @@
 
 use kitsunebi_application::OperationLease as ApplicationOperationLease;
 use kitsunebi_domain::{
-    AccessGrant, AccessPolicy, ActorId, ArtifactSet, AuditEvent, AuditResult, AuditScope,
+    AccessGrant, AccessPolicy, ActorId, Artifact, ArtifactSet, AuditEvent, AuditResult, AuditScope,
     AuditSource, ChangeSession, ChangeSessionState, ClusterRevision, ConfigBaseline,
     ConfigBaselineEntry, EndpointBinding, ExternalEndpoint, FileClassification, GameAPBinding,
     GameAPBindingTarget, GameCluster, MCPlayNetwork, Operation, OperationState, Permission,
@@ -27,6 +27,10 @@ fn initial_schema_keeps_second_wave_contracts_closed_and_non_nullable() {
     assert!(schema.contains("request_hash CHAR(64) NOT NULL"));
     assert!(schema.contains("CREATE TABLE actor_identities"));
     assert!(schema.contains("kind VARCHAR(16) NOT NULL"));
+    assert!(schema.contains(
+        "source_hash BINARY(32) GENERATED ALWAYS AS (UNHEX(SHA2(source, 256))) STORED NOT NULL"
+    ));
+    assert!(schema.contains("UNIQUE KEY uq_artifact_source (source_hash, source_id, digest)"));
     assert!(schema.contains("UNIQUE KEY uq_plan_request (change_session_id, idempotency_key)"));
     assert!(schema.contains("CREATE TRIGGER change_sessions_actor_identity"));
     assert!(schema.contains("CREATE TRIGGER plans_actor_identity"));
@@ -51,6 +55,52 @@ async fn fresh_schema_is_repeatable() {
     storage.migrate().await.expect("first migration");
     storage.migrate().await.expect("second migration");
     storage.ping().await.expect("ping MySQL");
+}
+
+#[tokio::test]
+async fn artifacts_round_trip_through_domain_and_db_version_columns() {
+    let Ok(url) = std::env::var("DATABASE_URL") else {
+        return;
+    };
+    let storage = MySqlStorage::connect(&url).await.expect("connect MySQL");
+    storage.migrate().await.expect("migration");
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let artifact = Artifact {
+        id: Default::default(),
+        kind: "plugin".into(),
+        name: format!("artifact-{suffix}"),
+        version: "1.2.3".into(),
+        source: "test".into(),
+        source_id: format!("source-{suffix}"),
+        digest: "a".repeat(64),
+        filename: "plugin.jar".into(),
+        compatibility: "{}".into(),
+        metadata: "{}".into(),
+    };
+    storage
+        .create_artifact(&artifact)
+        .await
+        .expect("artifact insert");
+    assert_eq!(
+        storage.get_artifact(artifact.id).await.unwrap(),
+        Some(artifact.clone())
+    );
+
+    let mut updated = artifact.clone();
+    updated.version = "1.2.4".into();
+    storage
+        .update_artifact(&updated, 1)
+        .await
+        .expect("artifact CAS update");
+    assert_eq!(
+        storage.get_artifact(artifact.id).await.unwrap(),
+        Some(updated.clone())
+    );
+    assert!(matches!(
+        storage.update_artifact(&updated, 1).await,
+        Err(StorageError::Conflict { entity: "artifact" })
+    ));
 }
 
 #[tokio::test]

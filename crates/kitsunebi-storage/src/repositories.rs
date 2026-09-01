@@ -2849,7 +2849,7 @@ impl MySqlStorage {
 
     pub async fn create_artifact(&self, artifact: &Artifact) -> Result<(), StorageError> {
         sqlx::query(
-            "INSERT INTO artifacts (id, kind, name, version, source, source_id, digest, filename, compatibility, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO artifacts (id, kind, name, artifact_version, source, source_id, digest, filename, compatibility, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(text(artifact.id.as_uuid()))
         .bind(&artifact.kind)
@@ -2881,7 +2881,7 @@ impl MySqlStorage {
     }
 
     pub async fn list_artifacts(&self) -> Result<Vec<Artifact>, StorageError> {
-        let rows = sqlx::query("SELECT * FROM artifacts ORDER BY name, version, id")
+        let rows = sqlx::query("SELECT * FROM artifacts ORDER BY name, artifact_version, id")
             .fetch_all(self.pool())
             .await
             .map_err(db)?;

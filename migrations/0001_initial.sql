@@ -115,7 +115,10 @@ CREATE TABLE artifacts (
     metadata JSON NOT NULL,
     version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    UNIQUE KEY uq_artifact_source (source, source_id, digest)
+    -- Keep the full source value while indexing a fixed-width digest.  The
+    -- three original utf8mb4 columns can exceed InnoDB's 3072-byte key limit.
+    source_hash BINARY(32) GENERATED ALWAYS AS (UNHEX(SHA2(source, 256))) STORED NOT NULL,
+    UNIQUE KEY uq_artifact_source (source_hash, source_id, digest)
 ) ENGINE=InnoDB;
 CREATE TABLE artifact_set_items (
     artifact_set_id CHAR(36) NOT NULL,

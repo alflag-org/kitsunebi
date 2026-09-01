@@ -1,0 +1,18 @@
+[
+  {
+    "id": "version01",
+    "version_number": "1.2.3",
+    "files": [
+      {
+        "hashes": {
+          "sha1": "0123456789abcdef0123456789abcdef01234567",
+          "sha512": "14697440701c3885f7c8d5faa59f336b471ca86332034eff0d3fddc02dc9b18b8356e840db54823c8fd2f2cbd0906969cf132cf8bb9c73dc769b4ffd817bd23d"
+        },
+        "url": "https://cdn.modrinth.com/data/project01/versions/version01/example.jar",
+        "filename": "example.jar",
+        "primary": true,
+        "size": 8
+      }
+    ]
+  }
+]

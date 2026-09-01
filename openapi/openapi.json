@@ -1,0 +1,5310 @@
+{
+  "components": {
+    "parameters": {
+      "FilePath": {
+        "in": "query",
+        "name": "path",
+        "required": false,
+        "schema": {
+          "description": "Normalized relative path; percent-encoded traversal, NUL, backslash, absolute, and parent components are rejected.",
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "IdempotencyKey": {
+        "in": "header",
+        "name": "Idempotency-Key",
+        "required": true,
+        "schema": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "IfMatch": {
+        "description": "A single strong entity-tag. Plan and staged-content routes use the quoted session version (for example, \"1\"); later lifecycle routes use the persisted plan hash.",
+        "in": "header",
+        "name": "If-Match",
+        "required": true,
+        "schema": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "RequestHash": {
+        "description": "SHA-256 of the canonical serialized typed payload; it must exactly equal MutationRequest.request_hash.",
+        "in": "header",
+        "name": "X-Request-Hash",
+        "required": true,
+        "schema": {
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "type": "string"
+        }
+      },
+      "RequiredFilePath": {
+        "in": "query",
+        "name": "path",
+        "required": true,
+        "schema": {
+          "description": "Normalized relative path; percent-encoded traversal, NUL, backslash, absolute, and parent components are rejected.",
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "StagedClassification": {
+        "description": "Closed content classification. State, secret, and unknown content cannot be staged.",
+        "in": "header",
+        "name": "x-kitsunebi-classification",
+        "required": true,
+        "schema": {
+          "enum": [
+            "managed",
+            "mutable_config",
+            "artifact",
+            "generated"
+          ],
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "invalid request"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "not found"
+      },
+      "PayloadTooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "payload too large"
+      },
+      "RateLimited": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "rate limited"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "unauthorized"
+      },
+      "Unsupported": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "unsupported operation"
+      }
+    },
+    "schemas": {
+      "Artifact": {
+        "additionalProperties": false,
+        "properties": {
+          "compatibility": {
+            "type": "string"
+          },
+          "digest": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "version",
+          "source",
+          "source_id",
+          "digest",
+          "filename",
+          "compatibility",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "ArtifactCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "compatibility": {
+            "type": "string"
+          },
+          "digest": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "manual",
+              "direct-url",
+              "modrinth",
+              "github-release",
+              "paper",
+              "hangar"
+            ],
+            "type": "string"
+          },
+          "size": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "name",
+          "version",
+          "source",
+          "source_id",
+          "digest",
+          "filename",
+          "compatibility",
+          "metadata",
+          "size"
+        ],
+        "type": "object"
+      },
+      "ArtifactDiscoverPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "enum": [
+              "manual",
+              "direct-url",
+              "modrinth",
+              "github-release",
+              "paper",
+              "hangar"
+            ],
+            "type": "string"
+          },
+          "query": {
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "provider",
+          "query"
+        ],
+        "type": "object"
+      },
+      "BackupTarget": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "service"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "cluster"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "world"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "execution_unit"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "BinaryFile": {
+        "format": "binary",
+        "type": "string"
+      },
+      "ChangeAcceptPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "change-accept"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "operation_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "operation_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ChangeApplyPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "change-apply"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "plan_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "plan_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ChangeApproval": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_hash": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "const": "approved",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_hash",
+          "session_id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ChangeApprovePayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "change-approve"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "plan_hash": {
+                "pattern": "^[0-9a-fA-F]{64}$",
+                "type": "string"
+              },
+              "plan_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "plan_id",
+              "plan_hash"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ChangeBeginPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "service_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service_id",
+          "cluster_id"
+        ],
+        "type": "object"
+      },
+      "ChangePlanPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "change-plan"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "backup_references": {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 1024,
+                "type": "array"
+              },
+              "backup_required": {
+                "type": "boolean"
+              },
+              "domain_revision": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "expected_artifact_hashes": {
+                "items": {
+                  "pattern": "^[0-9a-fA-F]{64}$",
+                  "type": "string"
+                },
+                "maxItems": 1024,
+                "type": "array"
+              },
+              "expected_file_hashes": {
+                "items": {
+                  "pattern": "^[0-9a-fA-F]{64}$",
+                  "type": "string"
+                },
+                "maxItems": 1024,
+                "type": "array"
+              },
+              "expires_at": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "observed_state_hashes": {
+                "items": {
+                  "pattern": "^[0-9a-fA-F]{64}$",
+                  "type": "string"
+                },
+                "maxItems": 1024,
+                "minItems": 1,
+                "type": "array"
+              },
+              "rollback_instructions": {
+                "items": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 1024,
+                "type": "array"
+              },
+              "service_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "session_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "steps": {
+                "items": {
+                  "$ref": "#/components/schemas/PlanStep"
+                },
+                "maxItems": 1024,
+                "minItems": 1,
+                "type": "array"
+              },
+              "target": {
+                "$ref": "#/components/schemas/PlanTarget"
+              }
+            },
+            "required": [
+              "session_id",
+              "service_id",
+              "target",
+              "domain_revision",
+              "observed_state_hashes",
+              "steps",
+              "expires_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ChangePlanResult": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_hash": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "const": "planned",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_hash",
+          "session_id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ChangeRollbackPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "change-rollback"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "operation_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "operation_id",
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ChangeSession": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "service_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "service_id",
+          "cluster_id",
+          "state",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ChangeVerifyPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "change-verify"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "operation_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "operation_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ClusterRevision": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_set": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "config_baseline": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "endpoint_bindings": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "health_checks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "java_requirement": {
+            "type": "string"
+          },
+          "minecraft_version": {
+            "type": "string"
+          },
+          "number": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "placement_requirements": {
+            "additionalProperties": false,
+            "properties": {
+              "process_managers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "required_capabilities": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "process_managers",
+              "required_capabilities"
+            ],
+            "type": "object"
+          },
+          "resource_requirements": {
+            "type": "string"
+          },
+          "runtime_profile": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "startup_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "world_bindings": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "runtime_profile",
+          "minecraft_version",
+          "java_requirement",
+          "artifact_set",
+          "config_baseline",
+          "world_bindings",
+          "endpoint_bindings",
+          "placement_requirements",
+          "resource_requirements",
+          "health_checks",
+          "startup_parameters"
+        ],
+        "type": "object"
+      },
+      "EndpointBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "binding_key": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "cluster_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "endpoint_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "metadata": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "revision_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "endpoint_id",
+          "cluster_id",
+          "revision_id",
+          "binding_key",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "FileBatchOperation": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "write"
+              },
+              "value": {
+                "additionalProperties": false,
+                "properties": {
+                  "classification": {
+                    "const": "mutable_config"
+                  },
+                  "content": {
+                    "$ref": "#/components/schemas/StagedContent"
+                  },
+                  "expected_before_digest": {
+                    "pattern": "^[0-9a-fA-F]{64}$",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "path": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "expected_before_digest",
+                  "content",
+                  "classification"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "FileDiff": {
+        "properties": {
+          "after_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changed": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "changed"
+        ],
+        "type": "object"
+      },
+      "FileEntry": {
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "size",
+          "digest",
+          "classification"
+        ],
+        "type": "object"
+      },
+      "FileEntryList": {
+        "items": {
+          "$ref": "#/components/schemas/FileEntry"
+        },
+        "type": "array"
+      },
+      "FileRead": {
+        "properties": {
+          "content": {
+            "items": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content_type",
+          "content"
+        ],
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "Live": {
+        "properties": {
+          "status": {
+            "const": "live"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "MutationPayload": {
+        "discriminator": {
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ChangePlanPayload"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeApprovePayload"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeApplyPayload"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeVerifyPayload"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeAcceptPayload"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeRollbackPayload"
+          }
+        ]
+      },
+      "MutationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "change"
+            ],
+            "type": "string"
+          },
+          "command": {
+            "enum": [
+              "plan",
+              "approve",
+              "apply",
+              "verify",
+              "accept",
+              "rollback"
+            ],
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/MutationPayload"
+          },
+          "request_hash": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "target_revision": {
+            "maxLength": 256,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "command",
+          "action",
+          "request_hash",
+          "expires_at",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "NoContent": {
+        "type": "object"
+      },
+      "Operation": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "plan_hash": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "plan_hash",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "OperationEvent": {
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "progress": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "sequence",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Permission": {
+        "description": "Explicit action grant. Role labels do not grant an action without this value and an object/service scope.",
+        "enum": [
+          "service.read",
+          "lifecycle.start",
+          "lifecycle.stop",
+          "lifecycle.restart",
+          "service.lifecycle",
+          "console.read",
+          "console.send",
+          "files.read",
+          "files.write",
+          "files.batch",
+          "artifact.discover",
+          "artifact.stage",
+          "artifact.activate",
+          "proxy.rollout",
+          "backup.create",
+          "backup.restore",
+          "world.read",
+          "world.write",
+          "endpoint.read",
+          "endpoint.write",
+          "service.archive",
+          "service.purge",
+          "change.plan",
+          "change.approve",
+          "change.apply",
+          "change.verify",
+          "change.accept",
+          "change.rollback",
+          "audit.read",
+          "access.read",
+          "access.manage",
+          "operation.read"
+        ],
+        "type": "string"
+      },
+      "PlanStep": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "execution_provision"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "expected_binding_hash",
+                      "domain_revision"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "execution_delete"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_state_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "expected_binding_hash",
+                      "expected_state_hash",
+                      "domain_revision",
+                      "expected_version"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "service_lifecycle_transition"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "expected_state": {
+                        "enum": [
+                          "Planned",
+                          "Testing",
+                          "Active",
+                          "Maintenance",
+                          "Sunsetting",
+                          "Archived"
+                        ],
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "next_state": {
+                        "enum": [
+                          "Planned",
+                          "Testing",
+                          "Active",
+                          "Maintenance",
+                          "Sunsetting",
+                          "Archived"
+                        ],
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "service_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "service_id",
+                      "expected_state",
+                      "next_state",
+                      "expected_version",
+                      "reason"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "cluster_revision_create"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "cluster_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "expected_current_number": {
+                        "minimum": 0,
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "new_endpoint_bindings": {
+                        "items": {
+                          "$ref": "#/components/schemas/EndpointBinding"
+                        },
+                        "maxItems": 128,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "revision": {
+                        "$ref": "#/components/schemas/ClusterRevision"
+                      }
+                    },
+                    "required": [
+                      "cluster_id",
+                      "revision",
+                      "new_endpoint_bindings",
+                      "expected_current_number"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "execution_lifecycle"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "enum": [
+                          "start",
+                          "stop",
+                          "restart"
+                        ],
+                        "type": "string"
+                      },
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_state_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "action",
+                      "expected_binding_hash",
+                      "expected_state_hash",
+                      "domain_revision"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "file_write"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "classification": {
+                        "enum": [
+                          "managed",
+                          "mutable_config",
+                          "artifact",
+                          "generated",
+                          "state",
+                          "secret",
+                          "unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "content": {
+                        "$ref": "#/components/schemas/StagedContent"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "path": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "path",
+                      "expected_binding_hash",
+                      "domain_revision",
+                      "content",
+                      "classification"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "file_move"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "classification": {
+                        "enum": [
+                          "managed",
+                          "mutable_config",
+                          "artifact",
+                          "generated",
+                          "state",
+                          "secret",
+                          "unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "from": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "to": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "from",
+                      "to",
+                      "expected_binding_hash",
+                      "domain_revision",
+                      "classification"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "file_quarantine"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "classification": {
+                        "enum": [
+                          "managed",
+                          "mutable_config",
+                          "artifact",
+                          "generated",
+                          "state",
+                          "secret",
+                          "unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "path": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "path",
+                      "expected_binding_hash",
+                      "domain_revision",
+                      "classification"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "file_batch"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "operations": {
+                        "maxItems": 1024,
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "binding_id",
+                      "expected_binding_hash",
+                      "domain_revision",
+                      "operations"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "artifact_stage"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "artifact_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_digest": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "artifact_id",
+                      "expected_digest",
+                      "expected_version",
+                      "domain_revision"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "artifact_register"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "artifact": {
+                        "$ref": "#/components/schemas/Artifact"
+                      },
+                      "content": {
+                        "$ref": "#/components/schemas/StagedContent"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "artifact",
+                      "content",
+                      "expected_version",
+                      "domain_revision"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "artifact_activate"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "artifact_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "artifact_set_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "cluster_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "destination_path": {
+                        "type": "string"
+                      },
+                      "expected_before_digest": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expected_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_digest": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_revision": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "target_revision": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "artifact_id",
+                      "artifact_set_id",
+                      "binding_id",
+                      "expected_binding_hash",
+                      "cluster_id",
+                      "expected_revision",
+                      "target_revision",
+                      "expected_digest",
+                      "expected_version",
+                      "destination_path",
+                      "expected_before_digest"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "proxy_rollout"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "configuration": {
+                        "items": {
+                          "$ref": "#/components/schemas/FileBatchOperation"
+                        },
+                        "maxItems": 1024,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "desired_state": {
+                        "enum": [
+                          "preparing",
+                          "ready",
+                          "accepting",
+                          "draining",
+                          "stopped",
+                          "failed"
+                        ],
+                        "type": "string"
+                      },
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_instance_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "expected_instance_state": {
+                        "enum": [
+                          "preparing",
+                          "ready",
+                          "accepting",
+                          "draining",
+                          "stopped",
+                          "failed"
+                        ],
+                        "type": "string"
+                      },
+                      "expected_instance_version": {
+                        "format": "uint64",
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "pool_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "target_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "target_binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "target_instance_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "target_instance_state": {
+                        "enum": [
+                          "preparing",
+                          "ready",
+                          "accepting",
+                          "draining",
+                          "stopped",
+                          "failed"
+                        ],
+                        "type": "string"
+                      },
+                      "target_instance_version": {
+                        "format": "uint64",
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "pool_id",
+                      "expected_instance_id",
+                      "target_instance_id",
+                      "expected_instance_version",
+                      "target_instance_version",
+                      "expected_instance_state",
+                      "target_instance_state",
+                      "target_binding_id",
+                      "target_binding_hash",
+                      "domain_revision",
+                      "desired_state",
+                      "configuration"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "world_writer_cutover"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "domain_revision": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_writer": {
+                        "format": "uuid",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expected_writer_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expected_writer_binding_id": {
+                        "format": "uuid",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "next_writer": {
+                        "type": "string"
+                      },
+                      "target_writer_binding_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "target_writer_binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "world_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "world_id",
+                      "expected_version",
+                      "expected_writer",
+                      "next_writer",
+                      "expected_writer_binding_id",
+                      "target_writer_binding_id",
+                      "expected_writer_binding_hash",
+                      "target_writer_binding_hash",
+                      "domain_revision"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "endpoint_rollout"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "cluster_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "expected_binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "expected_revision": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "runtime_binding_hashes": {
+                        "items": {
+                          "pattern": "^[0-9a-fA-F]{64}$",
+                          "type": "string"
+                        },
+                        "maxItems": 128,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "runtime_binding_ids": {
+                        "items": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "maxItems": 128,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "target_binding_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "target_revision": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "expected_binding_id",
+                      "target_binding_id",
+                      "cluster_id",
+                      "expected_revision",
+                      "target_revision",
+                      "expected_version",
+                      "runtime_binding_ids",
+                      "runtime_binding_hashes"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "access_policy_update"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "desired_grants": {
+                        "items": {
+                          "$ref": "#/components/schemas/PolicyGrant"
+                        },
+                        "maxItems": 1024,
+                        "type": "array"
+                      },
+                      "desired_policy_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "policy_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "service_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "policy_id",
+                      "service_id",
+                      "expected_version",
+                      "desired_grants",
+                      "desired_policy_hash"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "route_policy_update"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "disabled": {
+                        "type": "boolean"
+                      },
+                      "expected_cluster": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_priority": {
+                        "minimum": 0,
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "pool_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "route_id": {
+                        "type": "string"
+                      },
+                      "service_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "target_cluster": {
+                        "type": "string"
+                      },
+                      "target_priority": {
+                        "minimum": 0,
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "route_id",
+                      "pool_id",
+                      "service_id",
+                      "expected_cluster",
+                      "target_cluster",
+                      "expected_priority",
+                      "target_priority",
+                      "expected_version",
+                      "disabled"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "backup_create"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "type": "string"
+                      },
+                      "request_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "target": {
+                        "$ref": "#/components/schemas/BackupTarget"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "target",
+                      "request_hash"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "backup_restore"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "expected_manifest_digest": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_rollback_manifest_digest": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "reference_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "rollback_reference_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "target": {
+                        "$ref": "#/components/schemas/BackupTarget"
+                      }
+                    },
+                    "required": [
+                      "reference_id",
+                      "target",
+                      "expected_manifest_digest",
+                      "rollback_reference_id",
+                      "expected_rollback_manifest_digest",
+                      "expected_version"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "service_archive"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "service_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "sunsetting_evidence_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "service_id",
+                      "expected_version",
+                      "sunsetting_evidence_hash"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "service_purge"
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "archive_evidence_hash": {
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "type": "string"
+                      },
+                      "archived_at": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "expected_version": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "service_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "verified_backup_id": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "service_id",
+                      "expected_version",
+                      "archive_evidence_hash",
+                      "verified_backup_id",
+                      "archived_at"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "PlanTarget": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "service"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "cluster"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "world"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "proxy_pool"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "proxy_instance"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "artifact"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "artifact_set"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "endpoint"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "endpoint_binding"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "access_policy"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "backup"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "execution_unit"
+              },
+              "value": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "PolicyGrant": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/Permission"
+            },
+            "type": "array"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "operator",
+              "service_maintainer",
+              "auditor"
+            ],
+            "type": "string"
+          },
+          "service_scope": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor_id",
+          "role",
+          "service_scope",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "Ready": {
+        "additionalProperties": true,
+        "properties": {
+          "checks": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "status": {
+            "const": "ready"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "Resource": {
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ResourceList": {
+        "items": {
+          "$ref": "#/components/schemas/Resource"
+        },
+        "type": "array"
+      },
+      "Session": {
+        "additionalProperties": false,
+        "properties": {
+          "csrf_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "csrf_token"
+        ],
+        "type": "object"
+      },
+      "SftpScanPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "sftp-scan"
+          },
+          "value": {
+            "additionalProperties": false,
+            "properties": {
+              "after_manifest_hash": {
+                "type": "string"
+              },
+              "before_manifest_hash": {
+                "type": "string"
+              },
+              "change_session_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "changed_paths": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "after_digest": {
+                      "pattern": "^[0-9a-fA-F]{64}$",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "before_digest": {
+                      "pattern": "^[0-9a-fA-F]{64}$",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "classification": {
+                      "enum": [
+                        "managed",
+                        "mutable_config",
+                        "artifact",
+                        "generated",
+                        "state",
+                        "secret",
+                        "unknown"
+                      ],
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "added",
+                        "modified",
+                        "removed"
+                      ],
+                      "type": "string"
+                    },
+                    "path": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "kind",
+                    "classification"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 4096,
+                "type": "array"
+              },
+              "endpoint_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "execution_binding_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "observed_at": {
+                "format": "uint64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "service_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "out_of_band",
+                  "provisioning",
+                  "operator"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "change_session_id",
+              "service_id",
+              "endpoint_id",
+              "execution_binding_id",
+              "before_manifest_hash",
+              "after_manifest_hash",
+              "changed_paths",
+              "observed_at",
+              "source"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "StagedContent": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "size": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "digest",
+          "size"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "cloudflareAccess": {
+        "description": "Cloudflare Access RS256 JWT assertion. Cookie and bearer fallbacks are not accepted. The origin validates issuer, audience, exp/nbf/iat, kid, and the rotated JWKS before mapping the subject through the persisted actor identity and access-policy port; roles and service scopes are never inferred from JWT claims.",
+        "in": "header",
+        "name": "Cf-Access-Jwt-Assertion",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "title": "Kitsunebi Management API",
+    "version": "1.0.0"
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/access-policies": {
+      "get": {
+        "operationId": "listAccessPolicies",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "access.read"
+      }
+    },
+    "/api/v1/access-policies/{id}": {
+      "get": {
+        "operationId": "getAccessPolicies",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "access.read"
+      }
+    },
+    "/api/v1/artifacts": {
+      "get": {
+        "operationId": "listArtifacts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "artifact.discover"
+      }
+    },
+    "/api/v1/artifacts/discover": {
+      "post": {
+        "operationId": "discoverArtifacts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactDiscoverPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ArtifactCandidate"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "artifact candidates"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Discover artifact candidates",
+        "x-action": "artifact-discover",
+        "x-permission": "artifact.discover"
+      }
+    },
+    "/api/v1/artifacts/{id}": {
+      "get": {
+        "operationId": "getArtifacts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "artifact.discover"
+      }
+    },
+    "/api/v1/audit-events": {
+      "get": {
+        "operationId": "listAuditEvents",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "audit.read"
+      }
+    },
+    "/api/v1/audit-events/{id}": {
+      "get": {
+        "operationId": "getAuditEvents",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "audit.read"
+      }
+    },
+    "/api/v1/backups": {
+      "get": {
+        "operationId": "listBackups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/backups/{id}": {
+      "get": {
+        "operationId": "getBackups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/change-sessions": {
+      "get": {
+        "operationId": "listChangeSessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      },
+      "post": {
+        "operationId": "ApiV1ChangeSessions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeBeginPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeSession"
+                }
+              }
+            },
+            "description": "editable change session"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Begin a change session",
+        "x-action": "change-session",
+        "x-command": "begin",
+        "x-permission": "change.plan"
+      }
+    },
+    "/api/v1/change-sessions/{id}": {
+      "get": {
+        "operationId": "getChangeSessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/change-sessions/{id}/accept": {
+      "post": {
+        "operationId": "ApiV1ChangeSessionsIdAccept",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "operation"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "change-accept operation",
+        "x-action": "change-accept",
+        "x-command": "accept",
+        "x-permission": "change.accept"
+      }
+    },
+    "/api/v1/change-sessions/{id}/apply": {
+      "post": {
+        "operationId": "ApiV1ChangeSessionsIdApply",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "operation"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "change-apply operation",
+        "x-action": "change-apply",
+        "x-command": "apply",
+        "x-permission": "change.apply"
+      }
+    },
+    "/api/v1/change-sessions/{id}/approve": {
+      "post": {
+        "operationId": "ApiV1ChangeSessionsIdApprove",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeApproval"
+                }
+              }
+            },
+            "description": "change approval"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "change-approve operation",
+        "x-action": "change-approve",
+        "x-command": "approve",
+        "x-permission": "change.approve"
+      }
+    },
+    "/api/v1/change-sessions/{id}/plan": {
+      "post": {
+        "operationId": "ApiV1ChangeSessionsIdPlan",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePlanResult"
+                }
+              }
+            },
+            "description": "persisted change plan"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "change-plan operation",
+        "x-action": "change-plan",
+        "x-command": "plan",
+        "x-permission": "change.plan"
+      }
+    },
+    "/api/v1/change-sessions/{id}/rollback": {
+      "post": {
+        "operationId": "ApiV1ChangeSessionsIdRollback",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "operation"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "change-rollback operation",
+        "x-action": "change-rollback",
+        "x-command": "rollback",
+        "x-permission": "change.rollback"
+      }
+    },
+    "/api/v1/change-sessions/{id}/staged-content": {
+      "post": {
+        "operationId": "stageChangeSessionContent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/StagedClassification"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedContent"
+                }
+              }
+            },
+            "description": "content reference"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Stage content in a change session",
+        "x-permission": "change.plan"
+      }
+    },
+    "/api/v1/change-sessions/{id}/verify": {
+      "post": {
+        "operationId": "ApiV1ChangeSessionsIdVerify",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "operation"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "change-verify operation",
+        "x-action": "change-verify",
+        "x-command": "verify",
+        "x-permission": "change.verify"
+      }
+    },
+    "/api/v1/cluster-revisions": {
+      "get": {
+        "operationId": "listClusterRevisions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/cluster-revisions/{id}": {
+      "get": {
+        "operationId": "getClusterRevisions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/clusters": {
+      "get": {
+        "operationId": "listClusters",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/clusters/{id}": {
+      "get": {
+        "operationId": "getClusters",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "operationId": "listConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/config/{id}": {
+      "get": {
+        "operationId": "getConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/endpoints": {
+      "get": {
+        "operationId": "listEndpoints",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "endpoint.read"
+      }
+    },
+    "/api/v1/endpoints/{id}": {
+      "get": {
+        "operationId": "getEndpoints",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "endpoint.read"
+      }
+    },
+    "/api/v1/execution-units": {
+      "get": {
+        "operationId": "listExecutionUnits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/execution-units/{id}": {
+      "get": {
+        "operationId": "getExecutionUnits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/execution-units/{id}/console": {
+      "get": {
+        "description": "WebSocket relay to the server-side ConsoleSession port. The browser never receives GameAP credentials, frames are bounded, and audit records contain only direction, size, and digest.",
+        "operationId": "consoleRelay",
+        "responses": {
+          "101": {
+            "description": "WebSocket upgrade"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Relay an authenticated console session",
+        "x-permission": "console.read",
+        "x-permissions": [
+          "console.read",
+          "console.send"
+        ]
+      }
+    },
+    "/api/v1/execution-units/{id}/files": {
+      "get": {
+        "operationId": "filesFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FilePath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileEntryList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Browse files",
+        "x-permission": "files.read"
+      }
+    },
+    "/api/v1/execution-units/{id}/files/browse": {
+      "get": {
+        "operationId": "filesbrowseFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FilePath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileEntryList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Browse files",
+        "x-permission": "files.read"
+      }
+    },
+    "/api/v1/execution-units/{id}/files/diff": {
+      "get": {
+        "operationId": "filesdiffFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequiredFilePath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Diff a file",
+        "x-permission": "files.read"
+      }
+    },
+    "/api/v1/execution-units/{id}/files/download": {
+      "get": {
+        "operationId": "filesdownloadFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequiredFilePath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinaryFile"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Download a file",
+        "x-permission": "files.read"
+      }
+    },
+    "/api/v1/execution-units/{id}/files/read": {
+      "get": {
+        "operationId": "filesreadFile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequiredFilePath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileRead"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Read a file",
+        "x-permission": "files.read"
+      }
+    },
+    "/api/v1/health/providers": {
+      "get": {
+        "description": "Detailed GameAP, backup, monitoring, DNS, and TCPShield dependency health. This endpoint is authenticated; public /health and /ready remain shallow probes.",
+        "operationId": "providerHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Authenticated provider health"
+      }
+    },
+    "/api/v1/networks": {
+      "get": {
+        "operationId": "listNetworks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/networks/{id}": {
+      "get": {
+        "operationId": "getNetworks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/operations": {
+      "get": {
+        "operationId": "listOperations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "operation.read"
+      }
+    },
+    "/api/v1/operations/{id}": {
+      "get": {
+        "operationId": "getOperations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "operation.read"
+      }
+    },
+    "/api/v1/operations/{id}/events": {
+      "get": {
+        "description": "Operation-specific server-sent events. The authenticated actor and service scope are checked before the stream opens; the stream expires after the bounded lifetime or idle period.",
+        "operationId": "operationEvents",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationEvent"
+                }
+              }
+            },
+            "description": "text/event-stream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Stream operation progress",
+        "x-permission": "operation.read"
+      }
+    },
+    "/api/v1/proxy-instances": {
+      "get": {
+        "operationId": "listProxyInstances",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/proxy-instances/{id}": {
+      "get": {
+        "operationId": "getProxyInstances",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/proxy-pools": {
+      "get": {
+        "operationId": "listProxyPools",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/proxy-pools/{id}": {
+      "get": {
+        "operationId": "getProxyPools",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/runtime-profiles": {
+      "get": {
+        "operationId": "listRuntimeProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/runtime-profiles/{id}": {
+      "get": {
+        "operationId": "getRuntimeProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/services": {
+      "get": {
+        "operationId": "listServices",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/services/{id}": {
+      "get": {
+        "operationId": "getServices",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/session": {
+      "post": {
+        "description": "Returns a short-lived synchronizer token for the authenticated browser actor. Service actors are not eligible, and the request must carry one allowed Origin.",
+        "operationId": "session",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "browser session security material"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Issue a browser CSRF token"
+      }
+    },
+    "/api/v1/sftp-endpoints": {
+      "get": {
+        "operationId": "listSftpEndpoints",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/sftp-endpoints/{id}": {
+      "get": {
+        "operationId": "getSftpEndpoints",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/sftp-endpoints/{id}/scan": {
+      "post": {
+        "operationId": "sftpScan",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "operation"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unsupported"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "sftp-scan operation",
+        "x-action": "sftp-scan",
+        "x-command": "apply",
+        "x-permission": "change.plan"
+      }
+    },
+    "/api/v1/sftp-scans": {
+      "get": {
+        "operationId": "listSftpScans",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/sftp-scans/{id}": {
+      "get": {
+        "operationId": "getSftpScans",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "service.read"
+      }
+    },
+    "/api/v1/worlds": {
+      "get": {
+        "operationId": "listWorlds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "List resource",
+        "x-permission": "world.read"
+      }
+    },
+    "/api/v1/worlds/{id}": {
+      "get": {
+        "operationId": "getWorlds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Get resource",
+        "x-permission": "world.read"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "security": [],
+        "summary": "Controller health status"
+      }
+    },
+    "/live": {
+      "get": {
+        "operationId": "live",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Live"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "security": [],
+        "summary": "Liveness status"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Prometheus text exposition format"
+          }
+        },
+        "security": [],
+        "summary": "Prometheus metrics"
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ready"
+                }
+              }
+            },
+            "description": "success"
+          }
+        },
+        "security": [],
+        "summary": "Controller database readiness"
+      }
+    }
+  },
+  "security": [
+    {
+      "cloudflareAccess": []
+    }
+  ]
+}

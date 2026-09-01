@@ -1,0 +1,243 @@
+name: kitsunebi-dev
+
+services:
+  controller:
+    build:
+      context: ../..
+      dockerfile: deploy/dev/Dockerfile
+    ports: ["18080:8080"]
+    environment:
+      KITSUNEBI_MODE: local
+      KITSUNEBI_LOCAL_AUTH: "true"
+      KITSUNEBI_LISTEN_ADDR: 0.0.0.0:8080
+      KITSUNEBI_ALLOWED_ORIGINS: http://127.0.0.1:18080
+      KITSUNEBI_CSRF_TOKEN: dev-csrf-token
+      DATABASE_URL: mysql://kitsunebi:dev-password@mysql:3306/kitsunebi
+      GAMEAP_BASE_URL: http://mock-gameap:8080
+      GAMEAP_PAT: dev-gameap-pat
+      GAMEAP_API_VERSION: 4.4.2
+      GAMEAP_SCHEMA_SHA256: e4225e17edba528a07cb808422af832bf89410fc8f88d2759b199ac92862363e
+      GAMEAP_PROBE_SERVER_ID: "6"
+      GAMEAP_PROBE_NODE_ID: "1"
+      KITSUNEBI_ARTIFACT_ROOT: /var/lib/kitsunebi/artifacts
+      KITSUNEBI_WEB_STATIC_ROOT: /var/lib/kitsunebi/web
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mock-gameap:
+        condition: service_healthy
+      mock-tcpshield:
+        condition: service_healthy
+      mock-artifact:
+        condition: service_healthy
+      mock-backup:
+        condition: service_healthy
+      mock-dns:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - controller-artifacts:/var/lib/kitsunebi/artifacts
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs:
+      - /tmp
+
+  mysql:
+    image: mysql:8.4
+    command: ["--log-bin-trust-function-creators=1"]
+    environment:
+      MYSQL_DATABASE: kitsunebi
+      MYSQL_USER: kitsunebi
+      MYSQL_PASSWORD: dev-password
+      MYSQL_ROOT_PASSWORD: root-dev-password
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u kitsunebi -pdev-password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  mock-gameap:
+    image: python:3.13-slim
+    ports: ["18081:8080"]
+    environment:
+      MOCK_KIND: gameap
+      MOCK_STATE_ROOT: /var/lib/mock
+      PORT: "8080"
+    command: ["python", "/opt/mock/mock-server.py"]
+    volumes:
+      - ./mock-server.py:/opt/mock/mock-server.py:ro
+      - mock-gameap-state:/var/lib/mock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-tcpshield:
+    image: python:3.13-slim
+    ports: ["18082:8080"]
+    environment:
+      MOCK_KIND: tcpshield
+      MOCK_STATE_ROOT: /var/lib/mock
+      PORT: "8080"
+    command: ["python", "/opt/mock/mock-server.py"]
+    volumes:
+      - ./mock-server.py:/opt/mock/mock-server.py:ro
+      - mock-tcpshield-state:/var/lib/mock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-artifact:
+    image: python:3.13-slim
+    ports: ["18083:8080"]
+    environment:
+      MOCK_KIND: artifact
+      MOCK_STATE_ROOT: /var/lib/mock
+      PORT: "8080"
+    command: ["python", "/opt/mock/mock-server.py"]
+    volumes:
+      - ./mock-server.py:/opt/mock/mock-server.py:ro
+      - mock-artifact-state:/var/lib/mock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-backup:
+    image: python:3.13-slim
+    ports: ["18084:8080"]
+    environment:
+      MOCK_KIND: backup
+      MOCK_STATE_ROOT: /var/lib/mock
+      PORT: "8080"
+    command: ["python", "/opt/mock/mock-server.py"]
+    volumes:
+      - ./mock-server.py:/opt/mock/mock-server.py:ro
+      - mock-backup-state:/var/lib/mock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-monitoring:
+    image: python:3.13-slim
+    ports: ["18087:8080"]
+    environment:
+      MOCK_KIND: monitoring
+      MOCK_STATE_ROOT: /var/lib/mock
+      PORT: "8080"
+    command: ["python", "/opt/mock/mock-server.py"]
+    volumes:
+      - ./mock-server.py:/opt/mock/mock-server.py:ro
+      - mock-monitoring-state:/var/lib/mock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-dns:
+    image: python:3.13-slim
+    ports: ["18085:8080"]
+    environment:
+      MOCK_KIND: dns
+      MOCK_STATE_ROOT: /var/lib/mock
+      PORT: "8080"
+    command: ["python", "/opt/mock/mock-server.py"]
+    volumes:
+      - ./mock-server.py:/opt/mock/mock-server.py:ro
+      - mock-dns-state:/var/lib/mock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Optional GameAP 4.4.2 panel profile. The controller remains connected to
+  # the deterministic fixture above. GameAP's daemon is installed on the
+  # disposable dedicated server with the one-use enrollment command generated
+  # by the panel; it connects outbound to this gRPC port.
+  gameap-real:
+    profiles: ["real-gameap"]
+    image: gameap/gameap:4.4.2
+    ports: ["18086:8025", "18088:31718"]
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8025"
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: postgres://gameap:gameap-dev-password@gameap-real-db:5432/gameap?sslmode=disable
+      ENCRYPTION_KEY: "00000000000000000000000000000000"
+      AUTH_SECRET: "11111111111111111111111111111111"
+      CACHE_DRIVER: redis
+      CACHE_REDIS_ADDR: gameap-real-redis:6379
+      FILES_DRIVER: local
+      FILES_LOCAL_BASE_PATH: /var/lib/gameap/files
+      LOGGER_LEVEL: info
+      AUTH_SERVICE: paseto
+      GRPC_EXTERNAL_HOST: ${GAMEAP_GRPC_EXTERNAL_HOST:-127.0.0.1}
+      GRPC_EXTERNAL_PORT: ${GAMEAP_GRPC_EXTERNAL_PORT:-18088}
+    volumes:
+      - gameap-real-state:/var/lib/gameap
+    depends_on:
+      gameap-real-db:
+        condition: service_healthy
+      gameap-real-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8025/api/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+  gameap-real-db:
+    profiles: ["real-gameap"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: gameap
+      POSTGRES_USER: gameap
+      POSTGRES_PASSWORD: gameap-dev-password
+    volumes:
+      - gameap-real-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gameap"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gameap-real-redis:
+    profiles: ["real-gameap"]
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - gameap-real-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  controller-artifacts:
+  mysql-data:
+  mock-gameap-state:
+  mock-tcpshield-state:
+  mock-artifact-state:
+  mock-backup-state:
+  mock-monitoring-state:
+  mock-dns-state:
+  gameap-real-state:
+  gameap-real-db:
+  gameap-real-redis:

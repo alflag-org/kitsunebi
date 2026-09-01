@@ -1,0 +1,36 @@
+[Unit]
+Description=Kitsunebi controller
+# Publish this loopback listener only through a Cloudflare Tunnel protected by
+# Cloudflare Access; the controller validates the Access JWT itself.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kitsunebi
+Group=kitsunebi
+EnvironmentFile=-/etc/kitsunebi/kitsunebi.env
+ExecStart=/usr/local/bin/kitsunebi-controller serve
+Restart=on-failure
+UMask=0077
+StateDirectory=kitsunebi
+ReadWritePaths=/var/lib/kitsunebi/artifacts
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

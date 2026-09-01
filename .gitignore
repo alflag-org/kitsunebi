@@ -1,12 +1,22 @@
 /target/
 /.kitsunebi/
+*.env
+!*.env.example
+**/*.rs.bk
+/web/node_modules/
+/web/.svelte-kit/
+/web/build/
+/.playwright-cli/
+/playwright/
+/output/
+/web/test-results/
 
-# Live Minecraft data and local runtime state.
-/data/*
-/worlds/*
-/secrets/*
-!/secrets/.gitignore
-!/secrets/README.md
-
-# Manual artifacts are intentionally placed out of Git unless explicitly added.
-/plugins/manual/*/*.jar
+# Python tooling caches and local coverage output.
+**/__pycache__/
+*.py[cod]
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+/.coverage
+/coverage.xml
+/htmlcov/

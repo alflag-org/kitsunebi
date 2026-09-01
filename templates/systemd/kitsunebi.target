@@ -1,5 +1,0 @@
-[Unit]
-Description=kitsunebi Minecraft instance group
-
-[Install]
-WantedBy=multi-user.target

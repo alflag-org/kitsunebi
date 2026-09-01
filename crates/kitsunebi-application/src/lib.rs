@@ -1466,9 +1466,9 @@ impl StepExecutionEvidence {
             }
             (
                 Self::File { inverse },
-                OperationStep::FileWrite { binding: _, .. }
-                | OperationStep::FileMove { binding: _, .. }
-                | OperationStep::FileQuarantine { binding: _, .. },
+                OperationStep::FileWrite { .. }
+                | OperationStep::FileMove { .. }
+                | OperationStep::FileQuarantine { .. },
             ) => Self::validate_file_inverse(inverse),
             (Self::FileBatch { entries }, OperationStep::FileBatch { .. }) => {
                 if entries.is_empty() || entries.len() > 1024 {
@@ -1498,7 +1498,7 @@ impl StepExecutionEvidence {
                     ..
                 },
                 OperationStep::ExecutionProvision { binding: _ }
-                | OperationStep::ExecutionDelete { binding: _, .. }
+                | OperationStep::ExecutionDelete { .. }
                 | OperationStep::ExecutionStart { binding: _ }
                 | OperationStep::ExecutionStop { binding: _ }
                 | OperationStep::ExecutionRestart { binding: _ },

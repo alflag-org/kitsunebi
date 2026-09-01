@@ -161,10 +161,15 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # RUSTSEC-2023-0071 affects RSA private-key timing; sqlx-mysql 0.8.6 only performs public-key password encryption. Review/remove by 2026-12-01, or when SQLx/RustCrypto provides a non-affected dependency.
       - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ignore: RUSTSEC-2023-0071
       - uses: actions/dependency-review-action@ce3cf9537a52e8119d91fd484ab5b8a807627bf8 # v4.6.0
         if: github.event_name == 'pull_request'

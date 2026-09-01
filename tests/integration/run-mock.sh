@@ -92,7 +92,7 @@ if kind == "plan":
     observed = hashlib.sha256(b"false").hexdigest()
     before_digest = hashlib.sha256(b"fixture=true\n").hexdigest()
     value = {"session_id":session, "service_id":service,
-             "target":{"kind":"cluster", "value":cluster}, "domain_revision":0,
+             "target":{"kind":"cluster", "value":cluster}, "domain_revision":1,
              "observed_state_hashes":[observed, before_digest],
              "expected_file_hashes":[before_digest],
              "expected_artifact_hashes":[],
@@ -100,10 +100,10 @@ if kind == "plan":
                  {"action":{"kind":"execution_lifecycle", "value":{
                      "binding_id":binding, "action":"start",
                      "expected_binding_hash":binding_hash, "expected_state_hash":observed,
-                     "domain_revision":0}}},
+                     "domain_revision":1}}},
                  {"action":{"kind":"file_write", "value":{
                      "binding_id":binding, "path":"configs/example.conf",
-                     "expected_binding_hash":binding_hash, "domain_revision":0,
+                     "expected_binding_hash":binding_hash, "domain_revision":1,
                      "expected_before_digest":before_digest,
                      "content":{"digest":staged_digest, "size":int(staged_size)},
                      "classification":"mutable_config"}}}

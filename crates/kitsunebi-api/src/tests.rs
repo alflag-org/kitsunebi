@@ -1271,3 +1271,61 @@ fn access_policy_plan_requires_each_grant_to_name_the_target_service() {
         ))
     ));
 }
+
+#[test]
+fn policy_permissions_round_trip_with_canonical_wire_names() {
+    let permissions = [
+        (crate::PolicyPermission::ServiceRead, "service.read"),
+        (crate::PolicyPermission::LifecycleStart, "lifecycle.start"),
+        (crate::PolicyPermission::LifecycleStop, "lifecycle.stop"),
+        (
+            crate::PolicyPermission::LifecycleRestart,
+            "lifecycle.restart",
+        ),
+        (
+            crate::PolicyPermission::ServiceLifecycle,
+            "service.lifecycle",
+        ),
+        (crate::PolicyPermission::ConsoleRead, "console.read"),
+        (crate::PolicyPermission::ConsoleSend, "console.send"),
+        (crate::PolicyPermission::FilesRead, "files.read"),
+        (crate::PolicyPermission::FilesWrite, "files.write"),
+        (crate::PolicyPermission::FilesBatch, "files.batch"),
+        (
+            crate::PolicyPermission::ArtifactDiscover,
+            "artifact.discover",
+        ),
+        (crate::PolicyPermission::ArtifactStage, "artifact.stage"),
+        (
+            crate::PolicyPermission::ArtifactActivate,
+            "artifact.activate",
+        ),
+        (crate::PolicyPermission::ProxyRollout, "proxy.rollout"),
+        (crate::PolicyPermission::BackupCreate, "backup.create"),
+        (crate::PolicyPermission::BackupRestore, "backup.restore"),
+        (crate::PolicyPermission::WorldRead, "world.read"),
+        (crate::PolicyPermission::WorldWrite, "world.write"),
+        (crate::PolicyPermission::EndpointRead, "endpoint.read"),
+        (crate::PolicyPermission::EndpointWrite, "endpoint.write"),
+        (crate::PolicyPermission::ServiceArchive, "service.archive"),
+        (crate::PolicyPermission::ServicePurge, "service.purge"),
+        (crate::PolicyPermission::ChangePlan, "change.plan"),
+        (crate::PolicyPermission::ChangeApprove, "change.approve"),
+        (crate::PolicyPermission::ChangeApply, "change.apply"),
+        (crate::PolicyPermission::ChangeVerify, "change.verify"),
+        (crate::PolicyPermission::ChangeAccept, "change.accept"),
+        (crate::PolicyPermission::ChangeRollback, "change.rollback"),
+        (crate::PolicyPermission::AuditRead, "audit.read"),
+        (crate::PolicyPermission::AccessRead, "access.read"),
+        (crate::PolicyPermission::AccessManage, "access.manage"),
+        (crate::PolicyPermission::OperationRead, "operation.read"),
+    ];
+
+    for (permission, wire_name) in permissions {
+        assert_eq!(serde_json::to_value(permission).unwrap(), json!(wire_name));
+        assert_eq!(
+            serde_json::from_value::<crate::PolicyPermission>(json!(wire_name)).unwrap(),
+            permission
+        );
+    }
+}

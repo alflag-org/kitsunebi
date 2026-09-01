@@ -986,39 +986,70 @@ pub enum PolicyRole {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
 pub enum PolicyPermission {
+    #[serde(rename = "service.read")]
     ServiceRead,
+    #[serde(rename = "lifecycle.start")]
     LifecycleStart,
+    #[serde(rename = "lifecycle.stop")]
     LifecycleStop,
+    #[serde(rename = "lifecycle.restart")]
     LifecycleRestart,
+    #[serde(rename = "service.lifecycle")]
     ServiceLifecycle,
+    #[serde(rename = "console.read")]
     ConsoleRead,
+    #[serde(rename = "console.send")]
     ConsoleSend,
+    #[serde(rename = "files.read")]
     FilesRead,
+    #[serde(rename = "files.write")]
     FilesWrite,
+    #[serde(rename = "files.batch")]
     FilesBatch,
+    #[serde(rename = "artifact.discover")]
     ArtifactDiscover,
+    #[serde(rename = "artifact.stage")]
     ArtifactStage,
+    #[serde(rename = "artifact.activate")]
     ArtifactActivate,
+    #[serde(rename = "proxy.rollout")]
     ProxyRollout,
+    #[serde(rename = "backup.create")]
     BackupCreate,
+    #[serde(rename = "backup.restore")]
     BackupRestore,
+    #[serde(rename = "world.read")]
     WorldRead,
+    #[serde(rename = "world.write")]
     WorldWrite,
+    #[serde(rename = "endpoint.read")]
     EndpointRead,
+    #[serde(rename = "endpoint.write")]
     EndpointWrite,
+    #[serde(rename = "service.archive")]
     ServiceArchive,
+    #[serde(rename = "service.purge")]
     ServicePurge,
+    #[serde(rename = "change.plan")]
     ChangePlan,
+    #[serde(rename = "change.approve")]
     ChangeApprove,
+    #[serde(rename = "change.apply")]
     ChangeApply,
+    #[serde(rename = "change.verify")]
     ChangeVerify,
+    #[serde(rename = "change.accept")]
     ChangeAccept,
+    #[serde(rename = "change.rollback")]
     ChangeRollback,
+    #[serde(rename = "audit.read")]
     AuditRead,
+    #[serde(rename = "access.read")]
     AccessRead,
+    #[serde(rename = "access.manage")]
     AccessManage,
+    #[serde(rename = "operation.read")]
     OperationRead,
 }
 

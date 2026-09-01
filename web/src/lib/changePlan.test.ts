@@ -86,7 +86,11 @@ describe('typed ChangePlan builder', () => {
       proxy_rollout: { pool_id: uuid, expected_instance_id: uuid, target_instance_id: '22222222-2222-4222-8222-222222222222', expected_instance_version: 1, target_instance_version: 2, expected_instance_state: 'accepting', target_instance_state: 'ready', target_binding_id: uuid, target_binding_hash: digest, domain_revision: 1, desired_state: 'accepting', configuration: [{ kind: 'write', path: 'server.properties', content: { digest, size: 1 }, classification: 'mutable_config' }] },
       world_writer_cutover: { world_id: uuid, expected_version: 1, expected_writer: null, next_writer: uuid, expected_writer_binding_id: null, target_writer_binding_id: uuid, expected_writer_binding_hash: null, target_writer_binding_hash: digest, domain_revision: 1 },
       endpoint_rollout: { expected_binding_id: uuid, target_binding_id: '22222222-2222-4222-8222-222222222222', cluster_id: uuid, expected_revision: uuid, target_revision: '22222222-2222-4222-8222-222222222222', expected_version: 1, runtime_binding_ids: [uuid], runtime_binding_hashes: [digest] },
-      access_policy_update: { policy_id: uuid, service_id: uuid, expected_version: 1, desired_grants: [], desired_policy_hash: digest },
+      access_policy_update: {
+        policy_id: uuid, service_id: uuid, expected_version: 1,
+        desired_grants: [{ actor_id: uuid, role: 'operator', service_scope: uuid, permissions: ['service.read', 'change.plan', 'files.write'] }],
+        desired_policy_hash: digest
+      },
       route_policy_update: { route_id: uuid, pool_id: uuid, service_id: uuid, expected_cluster: uuid, target_cluster: uuid, expected_priority: 1, target_priority: 2, expected_version: 1, disabled: false },
       backup_create: { kind: 'external-database-reference', target: { kind: 'service', value: uuid }, request_hash: digest },
       backup_restore: { reference_id: uuid, target: { kind: 'service', value: uuid }, expected_manifest_digest: digest, rollback_reference_id: '22222222-2222-4222-8222-222222222222', expected_rollback_manifest_digest: digest, expected_version: 1 },

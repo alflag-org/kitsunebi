@@ -603,6 +603,7 @@ impl TcpShieldBackendSet {
     }
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ProxyState {
     Preparing,
     Ready,
@@ -1556,6 +1557,7 @@ impl BackupKind {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum BackupTarget {
     Service(ServiceId),
     Cluster(ClusterId),
@@ -1744,6 +1746,58 @@ mod tests {
             .unwrap(),
         );
         assert_ne!(plan.plan_hash, plan.compute_hash());
+    }
+
+    #[test]
+    fn file_write_plan_accepts_wire_file_classification() {
+        let action = serde_json::from_value::<PlanStepAction>(serde_json::json!({
+            "FileWrite": {
+                "binding_id": BindingId::new(),
+                "path": "configs/example.conf",
+                "expected_binding_hash": "a".repeat(64),
+                "domain_revision": 1,
+                "expected_before_digest": null,
+                "content": {"digest": "b".repeat(64), "size": 1},
+                "classification": "mutable_config"
+            }
+        }))
+        .expect("API plan representation should decode into the domain");
+
+        let step = PlanStep::new(action).expect("wire plan step should satisfy domain validation");
+
+        assert!(matches!(
+            step.action,
+            PlanStepAction::FileWrite {
+                classification: FileClassification::MutableConfig,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn plan_nested_enums_use_transport_spellings() {
+        assert_eq!(
+            serde_json::to_value(ProxyState::Preparing).unwrap(),
+            serde_json::json!("preparing")
+        );
+        let operation = serde_json::from_value::<FileBatchOperation>(serde_json::json!({
+            "kind": "write",
+            "value": {
+                "path": "configs/example.conf",
+                "expected_before_digest": null,
+                "content": {"digest": "a".repeat(64), "size": 1},
+                "classification": "mutable_config"
+            }
+        }))
+        .expect("API file operation should decode into the domain");
+        assert!(matches!(operation, FileBatchOperation::Write { .. }));
+
+        let target = serde_json::from_value::<BackupTarget>(serde_json::json!({
+            "kind": "cluster",
+            "value": ClusterId::new()
+        }))
+        .expect("API backup target should decode into the domain");
+        assert!(matches!(target, BackupTarget::Cluster(_)));
     }
 
     #[test]
@@ -2258,6 +2312,7 @@ impl GameAPBinding {
     }
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FileClassification {
     Managed,
     MutableConfig,
@@ -2821,6 +2876,7 @@ pub enum PlanStepAction {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum FileBatchOperation {
     Write {
         path: String,

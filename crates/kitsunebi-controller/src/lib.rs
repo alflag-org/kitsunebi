@@ -39,11 +39,11 @@ use kitsunebi_artifacts::{
 };
 use kitsunebi_backup::BackupHttpProvider;
 use kitsunebi_domain::{
-    AccessPolicy, ActorId, Artifact, BindingId, ChangeSessionId, ChangeSessionState, ClusterId,
-    FileBatchOperation, FileClassification, GameAPBinding, Operation, OperationState,
-    Permission as DomainPermission, PlanStep, ServiceId, SftpChangeKind as DomainSftpChangeKind,
-    SftpChangedPath as DomainSftpChangedPath, SftpScanSource as DomainSftpScanSource,
-    StagedContentOwnership, StagedContentRef,
+    AccessGrant, AccessPolicy, ActorId, Artifact, BindingId, ChangeSessionId, ChangeSessionState,
+    ClusterId, FileBatchOperation, FileClassification, GameAPBinding, Operation, OperationState,
+    Permission as DomainPermission, PlanStep, Role as DomainRole, ServiceId,
+    SftpChangeKind as DomainSftpChangeKind, SftpChangedPath as DomainSftpChangedPath,
+    SftpScanSource as DomainSftpScanSource, StagedContentOwnership, StagedContentRef,
 };
 use kitsunebi_gameap::{
     Capabilities, Client as GameApClient, ClientConfig as GameApClientConfig, ConsoleMessage,
@@ -539,6 +539,99 @@ fn domain_permission(permission: ApiPermission) -> DomainPermission {
         ApiPermission::AccessRead => DomainPermission::AccessRead,
         ApiPermission::AccessManage => DomainPermission::AccessManage,
         ApiPermission::OperationRead => DomainPermission::OperationRead,
+    }
+}
+
+fn domain_policy_role(role: kitsunebi_api::PolicyRole) -> DomainRole {
+    match role {
+        kitsunebi_api::PolicyRole::PlatformAdmin => DomainRole::PlatformAdmin,
+        kitsunebi_api::PolicyRole::Operator => DomainRole::Operator,
+        kitsunebi_api::PolicyRole::ServiceMaintainer => DomainRole::ServiceMaintainer,
+        kitsunebi_api::PolicyRole::Auditor => DomainRole::Auditor,
+    }
+}
+
+fn domain_policy_permission(
+    permission: kitsunebi_api::PolicyPermission,
+) -> Result<DomainPermission, ApiError> {
+    let wire_name = serde_json::to_value(permission)
+        .map_err(|_| ApiError::InvalidRequest("step.desired_grants.permissions"))?;
+    let wire_name = wire_name
+        .as_str()
+        .ok_or(ApiError::InvalidRequest("step.desired_grants.permissions"))?;
+    DomainPermission::parse_action(wire_name)
+        .ok_or(ApiError::InvalidRequest("step.desired_grants.permissions"))
+}
+
+fn domain_policy_grant(grant: kitsunebi_api::PolicyGrantPayload) -> Result<AccessGrant, ApiError> {
+    let actor = Uuid::parse_str(&grant.actor_id)
+        .map(ActorId::from_uuid)
+        .map_err(|_| ApiError::InvalidRequest("step.desired_grants.actor_id"))?;
+    let service_scope = grant
+        .service_scope
+        .as_deref()
+        .map(Uuid::parse_str)
+        .transpose()
+        .map_err(|_| ApiError::InvalidRequest("step.desired_grants.service_scope"))?
+        .map(ServiceId::from_uuid);
+    let permissions = grant
+        .permissions
+        .into_iter()
+        .map(domain_policy_permission)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(AccessGrant::for_actor(
+        actor,
+        domain_policy_role(grant.role),
+        service_scope,
+        permissions,
+    ))
+}
+
+fn domain_plan_step_action(
+    action: kitsunebi_api::PlanStepAction,
+) -> Result<kitsunebi_domain::PlanStepAction, ApiError> {
+    match action {
+        kitsunebi_api::PlanStepAction::AccessPolicyUpdate(step) => {
+            let policy_id = Uuid::parse_str(&step.policy_id)
+                .map(kitsunebi_domain::PolicyId::from_uuid)
+                .map_err(|_| ApiError::InvalidRequest("step.policy_id"))?;
+            let service_id = Uuid::parse_str(&step.service_id)
+                .map(ServiceId::from_uuid)
+                .map_err(|_| ApiError::InvalidRequest("step.service_id"))?;
+            let desired_grants = step
+                .desired_grants
+                .into_iter()
+                .map(domain_policy_grant)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(kitsunebi_domain::PlanStepAction::AccessPolicyUpdate {
+                policy_id,
+                service_id,
+                expected_version: step.expected_version,
+                desired_grants,
+                desired_policy_hash: step.desired_policy_hash,
+            })
+        }
+        action => {
+            let encoded = serde_json::to_value(action)
+                .map_err(|_| ApiError::InvalidRequest("invalid plan step"))?;
+            let kind = encoded
+                .get("kind")
+                .and_then(Value::as_str)
+                .ok_or(ApiError::InvalidRequest("invalid plan step"))?;
+            let variant = kind
+                .split('_')
+                .map(|part| {
+                    let mut chars = part.chars();
+                    chars.next().map_or_else(String::new, |first| {
+                        first.to_uppercase().collect::<String>() + chars.as_str()
+                    })
+                })
+                .collect::<String>();
+            serde_json::from_value::<kitsunebi_domain::PlanStepAction>(
+                json!({ variant: encoded.get("value") }),
+            )
+            .map_err(|_| ApiError::InvalidRequest("invalid plan step"))
+        }
     }
 }
 
@@ -8541,26 +8634,7 @@ impl MysqlManagement {
             .steps
             .into_iter()
             .map(|step| {
-                let encoded = serde_json::to_value(step.action)
-                    .map_err(|_| ApiError::InvalidRequest("invalid plan step"))?;
-                let kind = encoded
-                    .get("kind")
-                    .and_then(Value::as_str)
-                    .ok_or(ApiError::InvalidRequest("invalid plan step"))?;
-                let variant = kind
-                    .split('_')
-                    .map(|part| {
-                        let mut chars = part.chars();
-                        chars
-                            .next()
-                            .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
-                            .unwrap_or_default()
-                    })
-                    .collect::<String>();
-                let action = serde_json::from_value::<kitsunebi_domain::PlanStepAction>(
-                    json!({ variant: encoded.get("value") }),
-                )
-                .map_err(|_| ApiError::InvalidRequest("invalid plan step"))?;
+                let action = domain_plan_step_action(step.action)?;
                 PlanStep::new(action).map_err(|_| ApiError::InvalidRequest("invalid plan step"))
             })
             .collect::<Result<Vec<_>, ApiError>>()?;
@@ -10910,6 +10984,37 @@ mod tests {
         assert!(!ControllerStepPort::grants_are_service_scoped(
             &[grant(Some(other))],
             service,
+        ));
+    }
+
+    #[test]
+    fn api_access_policy_step_reaches_domain_plan_step() {
+        let actor = Uuid::new_v4();
+        let service = Uuid::new_v4();
+        let action = kitsunebi_api::PlanStepAction::AccessPolicyUpdate(
+            kitsunebi_api::AccessPolicyUpdateStep {
+                policy_id: Uuid::new_v4().to_string(),
+                service_id: service.to_string(),
+                expected_version: 1,
+                desired_grants: vec![kitsunebi_api::PolicyGrantPayload {
+                    actor_id: actor.to_string(),
+                    role: kitsunebi_api::PolicyRole::Operator,
+                    service_scope: Some(service.to_string()),
+                    permissions: vec![kitsunebi_api::PolicyPermission::FilesWrite],
+                }],
+                desired_policy_hash: "a".repeat(64),
+            },
+        );
+
+        let plan_step = PlanStep::new(domain_plan_step_action(action).unwrap()).unwrap();
+        assert!(matches!(
+            plan_step.action,
+            kitsunebi_domain::PlanStepAction::AccessPolicyUpdate {
+                desired_grants: grants,
+                ..
+            } if grants[0].actor == ActorId::from_uuid(actor)
+                && grants[0].role == DomainRole::Operator
+                && grants[0].permissions == vec![DomainPermission::FilesWrite]
         ));
     }
 

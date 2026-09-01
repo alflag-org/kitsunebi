@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm run test
+      - run: npm run build
+      - name: Detect system Chrome for Playwright
+        id: chrome
+        run: |
+          # The Playwright `chrome` channel resolves this installation path on
+          # Linux; checking the same executable keeps a positive probe honest.
+          if [ -x /opt/google/chrome/chrome ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "chrome=/opt/google/chrome/chrome"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "the Playwright Chrome-channel executable is unavailable; Playwright E2E is skipped"
+          fi
+      - name: Run Web Playwright flow with system Chrome
+        if: steps.chrome.outputs.available == 'true'
+        run: npm run e2e
+      - name: Report skipped Web Playwright flow
+        if: steps.chrome.outputs.available != 'true'
+        run: echo "::notice::Web Playwright flow skipped because system Chrome is unavailable"
+
+  migration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: kitsunebi
+          MYSQL_USER: kitsunebi
+          MYSQL_PASSWORD: ci-password
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u kitsunebi -pci-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+      - run: cargo test --test mysql-migrations --package kitsunebi-storage
+        env:
+          DATABASE_URL: mysql://kitsunebi:ci-password@127.0.0.1:3306/kitsunebi
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Detect Docker Compose runtime
+        id: docker
+        run: |
+          if command -v docker >/dev/null 2>&1 \
+            && docker compose version >/dev/null 2>&1 \
+            && docker info >/dev/null 2>&1; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Docker Compose runtime is unavailable; container integration is skipped"
+          fi
+      - name: Validate development topology
+        if: steps.docker.outputs.available == 'true'
+        run: docker compose -f deploy/dev/compose.yaml config --quiet
+      - name: Start development topology
+        if: steps.docker.outputs.available == 'true'
+        run: docker compose -f deploy/dev/compose.yaml up --build --detach --wait --wait-timeout 180
+      - name: Wait for migrated controller
+        if: steps.docker.outputs.available == 'true'
+        run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:18080/ready
+      - name: Seed local policy fixtures
+        if: steps.docker.outputs.available == 'true'
+        run: >-
+          docker compose -f deploy/dev/compose.yaml exec -T mysql
+          mysql --protocol=TCP -ukitsunebi -pdev-password kitsunebi
+          < tests/integration/seed-local.sql
+      - name: Run persisted controller change flow
+        if: steps.docker.outputs.available == 'true'
+        run: tests/integration/run-mock.sh
+      - name: Report skipped container integration
+        if: steps.docker.outputs.available != 'true'
+        run: echo "::notice::Container integration skipped because Docker Compose is unavailable"
+      - if: always() && steps.docker.outputs.available == 'true'
+        run: docker compose -f deploy/dev/compose.yaml down --volumes --remove-orphans
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+      - name: OpenAPI generator matches checked-in snapshot
+        run: |
+          snapshot=$(mktemp)
+          cargo run -p kitsunebi-api --example export_openapi > "$snapshot"
+          cmp "$snapshot" openapi/openapi.json
+          rm -f "$snapshot"
+      - name: OpenAPI snapshot test
+        run: cargo test -p kitsunebi-api tests::openapi_is_nonempty_and_has_all_management_resources -- --exact
+      - name: Backup provider mock contract
+        run: tests/contract/backup/mock-contract.sh
+
+  gameap-plugin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/gameap-plugin
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: 1.94.0
+          targets: wasm32-wasip1
+          components: rustfmt
+      - name: Check plugin formatting
+        run: cargo fmt -- --check
+      - name: Test plugin natively
+        run: cargo test --all-targets
+      - name: Check plugin natively
+        run: cargo check --all-targets
+      - name: Compile plugin for WASI
+        run: cargo check --target wasm32-wasip1 --release
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/dependency-review-action@ce3cf9537a52e8119d91fd484ab5b8a807627bf8 # v4.6.0
+        if: github.event_name == 'pull_request'

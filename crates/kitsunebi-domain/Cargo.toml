@@ -1,0 +1,17 @@
+[package]
+name = "kitsunebi-domain"
+description = "MCPlayNetwork domain model and invariants"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[lints]
+workspace = true

@@ -1,134 +1,103 @@
 # kitsunebi
 
-kitsunebi is an operational foundation for MCPlayNetwork's long-running
-Minecraft network. It is not a general game-server hosting panel, a
-Pterodactyl-compatible UI, or a Docker-only Minecraft template.
+kitsunebi is the MCPlayNetwork management plane. It records services, clusters,
+worlds, revisions, proxies, access policy, changes, artifacts, endpoints, and
+backups. GameAP 4.4.2 remains the execution plane for process lifecycle,
+console, files, node status, and resource status.
 
-The implementation is organized around a CLI and a Rust core library:
+Kitsunebi does not manage Minecraft processes directly, expose GameAP
+credentials to browsers, or treat a GameAP server/node as a domain object.
 
-- `kitsunebi status <target>`
-- `kitsunebi start|stop|restart <target>`
-- `kitsunebi logs <target>`
-- `kitsunebi cmd <target> -- "<game command>"`
-- `kitsunebi dev up|down|reset`
-- `kitsunebi plugin diff|sync <target>`
-- `kitsunebi plugin lock`
-- `kitsunebi plugin update-plan <plugin> --to <version>`
-- `kitsunebi plugin three-way-diff <target> <path> <migrated-file>`
-- `kitsunebi config diff|drift|apply <target>`
-- `kitsunebi backup preflight <target>`
-- `kitsunebi maintenance restart <target> --confirm`
-- `kitsunebi materialize <target>`
+## Local start
 
-The first production runtime adapter is `systemd-java`. Docker Compose is kept
-as the standard development topology and as an optional runtime adapter, but it
-is not the production design center.
+Build the static UI before starting the controller:
 
-## Repository Layout
-
-```text
-src/
-  lib.rs              # core API, inventory loader, adapters, managers
-  main.rs             # CLI entrypoint
-
-inventory/
-  production.yaml     # production target definitions
-  development.yaml    # local/dev target definitions
-
-instances/
-  <instance>/
-    configs/          # explicitly managed config files
-    plugins/          # optional desired manual jar set for this instance
-    plugin-policy.yaml
-    instance.yaml
-
-plugins/
-  manual/<instance>/  # preferred manual artifact source
-
-templates/
-  systemd/
-  docker-compose/
-
-docs/
-  spec.md
-  operations.md
+```sh
+npm --prefix web ci --no-audit --no-fund
+npm --prefix web run build
 ```
 
-Live data, secrets, logs, generated files, cache, and production worlds do not
-belong in Git.
+The local fixture topology is started with:
 
-## Build and Test
+```sh
+docker compose -f deploy/dev/compose.yaml up --build
+```
 
-```bash
+After `/ready` is healthy, load the deterministic policy fixture and run the
+persisted typed controller flow:
+
+```sh
+docker compose -f deploy/dev/compose.yaml exec -T mysql \
+  mysql --protocol=TCP -ukitsunebi -pdev-password kitsunebi \
+  < tests/integration/seed-local.sql
+tests/integration/run-mock.sh
+```
+
+This checks observe, plan, approve, apply, verify, and accept through the API;
+provider fixtures are not production compatibility proof.
+
+For a direct production controller start, MySQL and all required configuration
+must be present: `KITSUNEBI_LISTEN_ADDR`, `DATABASE_URL`, `GAMEAP_BASE_URL`,
+`GAMEAP_PAT`, `KITSUNEBI_ARTIFACT_ROOT`, `KITSUNEBI_WEB_STATIC_ROOT`,
+`KITSUNEBI_ALLOWED_ORIGINS`, `CLOUDFLARE_ACCESS_ISSUER`,
+`CLOUDFLARE_ACCESS_AUDIENCE`, and `CLOUDFLARE_ACCESS_JWKS_URL`.
+Local mode omits the Cloudflare variables and requires
+`KITSUNEBI_MODE=local`, `KITSUNEBI_LOCAL_AUTH=true`,
+`KITSUNEBI_CSRF_TOKEN`, and a controller build with the `local-auth` feature.
+Requests then use exactly one canonical UUID in
+`X-Kitsunebi-Local-Subject`; the Cloudflare assertion header must be absent.
+Local auth is rejected in production. `TCPSHIELD_BASE_URL`,
+`TCPSHIELD_API_KEY`, and `TCPSHIELD_NETWORK_ID` are an optional all-or-nothing
+group. `GAMEAP_ALLOW_CREATION` is disabled by default.
+
+```sh
 cargo test
-cargo build
+cargo run -p kitsunebi-controller
 ```
 
-The implementation currently avoids external Rust dependencies so it can
-build without registry access.
+The API exposes `/live`, `/health`, `/ready`, `/metrics`, versioned resources
+under `/api/v1`, operation event SSE, and the execution-unit console WebSocket.
+The CLI requires `KITSUNEBI_API_URL` and either the Cloudflare Access service
+token pair `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET` or
+`CF_ACCESS_JWT_ASSERTION`. A service-token subject must already be registered
+as a persisted Service actor identity and granted access by the stored policy;
+the CLI and server never infer roles or service scopes from JWT claims. Local
+HTTP requires
+`KITSUNEBI_ALLOW_INSECURE_LOCALHOST=1`.
 
-## Basic Usage
+## Core workflows
 
-Use the production inventory by default:
+Read resources through the API or CLI, then mutate through a ChangeSession with
+a typed request hash, a persisted plan hash, future expiry, `Idempotency-Key`,
+and `If-Match`. File and artifact bytes are first posted to the session's
+`staged-content` endpoint and plans carry only their digest and size. The
+application layer records the operation, per-step invocation/evidence, and
+audit evidence. Changes follow plan, apply, verify, accept, or explicit
+rollback; a failed operation is never retried automatically because the
+provider may have applied the side effect before reporting an error.
+Reusing an idempotency key with the same typed request returns the persisted
+result; changing the request under that key is rejected.
 
-```bash
-kitsunebi status backend-vanilla-1
-kitsunebi logs backend-vanilla-1 --lines 200
-kitsunebi cmd backend-vanilla-1 -- "list"
-```
+Access-policy changes are service-owned: every desired grant must name the
+target service explicitly. A missing or another service's scope is rejected.
 
-Use a specific inventory:
+GameAP mutations are allowed only when required capabilities are advertised.
+The adapter uses a PAT server-side and obtains a short-lived token for console
+relay. TCPShield backend-set changes use its isolated adapter.
 
-```bash
-kitsunebi --inventory inventory/development.yaml status
-```
+## Documentation
 
-Start the development topology:
+- [Architecture](docs/architecture.md)
+- [Domain model](docs/domain-model.md)
+- [GameAP integration](docs/gameap.md)
+- [Operations](docs/operations.md)
+- [Deployment](docs/deployment.md)
+- [Security](docs/security.md)
+- [Development](docs/development.md)
 
-```bash
-kitsunebi dev up
-kitsunebi dev logs dev-vanilla
-kitsunebi dev cmd dev-vanilla -- "list"
-kitsunebi dev down
-```
+## External proof status
 
-Manage manual plugin artifacts:
-
-```bash
-kitsunebi plugin diff backend-vanilla-1
-kitsunebi plugin sync backend-vanilla-1
-kitsunebi plugin lock
-kitsunebi plugin update-plan luckperms --to 5.4.152
-kitsunebi plugin three-way-diff backend-vanilla-1 plugins/LuckPerms/config.yml /tmp/migrated-config.yml
-```
-
-Manage explicit config files:
-
-```bash
-kitsunebi config diff backend-vanilla-1
-kitsunebi config apply backend-vanilla-1
-kitsunebi config import backend-vanilla-1 plugins/LuckPerms/config.yml
-```
-
-`config apply` refuses to overwrite live drift or conflicts unless
-`--overwrite-conflicts` is explicitly passed.
-
-Production workflow helpers:
-
-```bash
-kitsunebi backup preflight backend-vanilla-1
-kitsunebi maintenance restart backend-vanilla-1 --notice "maintenance restart" --confirm
-kitsunebi materialize backend-vanilla-1
-```
-
-## Secret Boundary
-
-RCON passwords are read from one of these locations:
-
-- `KITSUNEBI_RCON_PASSWORD`
-- `KITSUNEBI_<TARGET>_RCON_PASSWORD`
-- `/etc/kitsunebi/secrets/<target>.env`
-- `secrets/<target>.env`
-- `secrets/rcon.env`
-
-Each env file uses `RCON_PASSWORD=...`. Secrets must not be committed.
+Unit and static checks are local. A real GameAP, TCPShield, MySQL, Cloudflare
+Access/Tunnel, backup, and proxy-drain environment is not present in this
+workspace, so those integration gates remain unrun. The public GameAP process
+manager contract and backup invocation contract are external inputs.

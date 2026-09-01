@@ -1,122 +1,139 @@
 # Operations
 
-## Inventory Selection
+## Change control
 
-By default, kitsunebi reads `inventory/production.yaml` when it exists. Use
-`--inventory` or `KITSUNEBI_INVENTORY` to select another file.
+All mutations use a persisted ChangeSession. The controller observes the
+current state, stores a typed plan with an expiry, per-step observed hashes,
+typed targets/actions, and staged content, then requires an explicit approval.
+Apply loads that plan and session and executes it through application ports.
+Verify re-observes each step and records provider evidence. Only a verified
+operation can be accepted. Rollback is an explicit operation and is also
+guarded by the stored revision, hashes, idempotency key, and `If-Match` value.
+Caller-supplied provider IDs or observation hashes are not authoritative.
 
-```bash
-kitsunebi --inventory inventory/development.yaml status
-KITSUNEBI_INVENTORY=inventory/development.yaml kitsunebi status
-```
+Unknown capability, missing provider evidence, stale revision, hash mismatch,
+expiry, timeout, rate limit, partial response, or rollback conflict fails
+closed. A failed or ambiguous external mutation remains unaccepted and is
+reported in operation and audit evidence.
 
-## Production Status and Logs
+An idempotency key is bound to the exact typed request and its actor, service,
+target, and session. An exact replay returns the persisted result; reusing the
+key for a different request is rejected.
 
-Production instances are expected to use systemd units named
-`kitsunebi@<instance>.service` unless `logs.journald_unit` overrides the unit in
-inventory.
+## Typed actions and staged content
 
-```bash
-kitsunebi status backend-vanilla-1
-kitsunebi restart backend-vanilla-1
-kitsunebi logs backend-vanilla-1 --lines 200
-kitsunebi logs backend-vanilla-1 --follow
-```
+The plan action set is closed and typed. It includes `execution_provision`,
+`execution_delete`, `service_lifecycle_transition`, `cluster_revision_create`,
+`execution_lifecycle`, file write/move/quarantine/batch, artifact
+stage/`artifact_register` and binding-aware `artifact_activate`, proxy rollout,
+world-writer cutover, endpoint rollout, access-policy update,
+`route_policy_update`, backup create/restore, service archive, and service
+purge. Each action names a domain object and contains the expected revision,
+version, binding fingerprint, digest, or postcondition needed for a fresh
+observation. Provider IDs are resolved from persisted bindings; they are not
+accepted as plan authority.
 
-## Game Commands
+File and artifact bytes are staged before planning with
+`POST /api/v1/change-sessions/{id}/staged-content` using
+`Content-Type: application/octet-stream`. The response is only a
+content-addressed SHA-256 digest and byte size. The session and actor own that
+reference until the plan expires, and the plan carries the reference rather
+than embedding bytes. Size, digest, classification, and expiry are checked
+again when the application loads the plan.
 
-RCON is the only initial command transport.
+File quarantine is a safe, reversible operation. A managed or mutable-config
+relative path is observed and moved into the controller-owned
+`.kitsunebi-quarantine` namespace with its original hash recorded. Rollback
+moves the same object back only when the binding and compare-and-set evidence
+still match. Unknown, generated, state, and secret files are observe-only or
+blocked; their reads expose metadata and digests only. They are never returned
+as content, overwritten, or silently deleted.
 
-```bash
-kitsunebi cmd backend-vanilla-1 -- "list"
-kitsunebi cmd backend-vanilla-1 -- "say maintenance starts in 5 minutes"
-```
+Apply records a durable invocation and evidence entry for every step before it
+advances. An in-progress operation can resume from those entries, while
+retaining partial failure evidence. Once an operation is `failed`, automatic
+retry is rejected: the provider may have taken effect before returning an
+error, so the operator must inspect the durable evidence and request explicit
+rollback. Verify performs a fresh provider observation and compares it with
+the stored per-step evidence;
+the caller cannot supply a replacement observation hash. Acceptance is
+available only after that re-observation reaches `Verified`.
 
-RCON password lookup order:
+Access-policy updates replace grants for one persisted service policy. Every
+desired grant must carry that same service's explicit scope; unscoped and
+cross-service grants are rejected before planning. Service actors are usable
+only for their persisted service binding; browser actors have no service
+binding.
 
-1. `KITSUNEBI_RCON_PASSWORD`
-2. `KITSUNEBI_<TARGET>_RCON_PASSWORD`
-3. `/etc/kitsunebi/secrets/<target>.env`
-4. `secrets/<target>.env`
-5. `secrets/rcon.env`
+## Proxy rolling update
 
-The env file format is:
+The plan stores the `TcpShieldBackendSet` and each `ProxyInstanceBinding`.
+Execution creates the target GameAP execution unit when needed, writes its
+owned staged mutable configuration and verifies each digest, then starts it
+and verifies running status and backend health. Only then is the target added
+to the stored TCPShield set. Removing the old backend disables new edge
+assignments; monitoring only proves that active connections have reached zero.
+The old GameAP execution is stopped only after that proof, and stopped status
+is verified. Every provider response is checked against the stored binding and
+set evidence. If any postcondition fails, compensation first restores and
+verifies the old execution, then restores the prior backend set and cleans up
+the target's effects. Explicit rollback uses the same order, so traffic is not
+returned to an unready old execution. A configured monitoring connection-drain
+signal is therefore a required dependency; if it is absent, ambiguous, or
+stale, the controller fails closed and leaves the operation unaccepted.
 
-```env
-RCON_PASSWORD=change-me
-```
+## Worlds, clusters, artifacts, and configuration
 
-## Development Topology
+World ownership is persisted on the service/cluster/world model and checked
+with the expected domain revision. A world cutover is a planned typed action;
+it is not a direct GameAP or filesystem mutation. Cluster revisions are
+immutable. Artifact discovery, download, SHA-256 verification, and staging are
+separate typed steps, and activation is bound to the change session and
+revision. Managed configuration carries its owner, path classification,
+expected digest, and staged bytes; secrets are never ordinary configuration.
 
-The default development compose file is
-`templates/docker-compose/dev-stack.yml`. Override it with
-`KITSUNEBI_DEV_COMPOSE`.
+SFTP is an operator-controlled path using OpenSSH credentials outside the
+controller. A scan records GameAP file hashes before and after an explicit
+change and stores the endpoint and session evidence. It makes no SFTP-server or
+realtime-audit claim. Unknown files are observe-only; generated/state files are
+not overwritten by configuration sync.
 
-```bash
-kitsunebi dev up
-kitsunebi dev logs dev-vanilla
-kitsunebi dev cmd dev-vanilla -- "list"
-kitsunebi dev reset
-```
+Endpoint updates resolve the target through the DNS adapter, compare the
+expected record and revision, and verify endpoint health after the change.
+DNS/TCPShield/monitoring unavailability or external drift blocks acceptance.
 
-`dev reset` removes compose volumes for the dev topology.
+## Backup and restore
 
-## Plugin Diff and Sync
+Backup steps use a typed `BackupReference`; the external provider contract uses
+the exact `external-database-reference` kind when the reference points at an
+external database. Create and restore requests are idempotent and persist the
+provider invocation. Restore apply records the provider's invocation and
+expected manifest digest; restore verify re-observes that digest. Caller
+evidence cannot turn an unverified restore into an accepted operation. If the
+configured backup HTTP provider is absent or unavailable, backup-required
+plans fail closed and health reports the backup dependency separately.
 
-The manual artifact workflow searches desired jars in this order:
+## Sunset, archive, and purge
 
-1. `instances/<target>/plugins/`
-2. `plugins/manual/<target>/`
-3. `plugins/dist/<target>/`
+Sunsetting is a planned lifecycle transition. The archive sequence must stop
+new joins, stop the route, verify the final world and external-database
+references, stop the execution unit, revoke access, and persist archive
+evidence. Each stage is independently observed and can be rolled back only
+where the external provider supplies a safe compensating action.
 
-```bash
-kitsunebi plugin diff backend-vanilla-1
-kitsunebi plugin sync backend-vanilla-1
-kitsunebi plugin lock
-kitsunebi plugin update-plan luckperms --to 5.4.152
-kitsunebi plugin three-way-diff backend-vanilla-1 plugins/LuckPerms/config.yml /tmp/migrated-config.yml
-```
+Purge is a separate action allowed only for an already archived service. It
+creates a tombstone while preserving audit history and operation evidence; it
+does not reuse the archive or lifecycle path and never purges an active or
+sunsetting service.
 
-Unknown jars in the live tree are never deleted by these commands.
+## Failure handling and health
 
-## Config Diff, Apply, and Import
-
-Managed config is explicit. Put files under `instances/<target>/configs/` using
-the same relative path they should have below the live tree.
-
-```bash
-kitsunebi config diff backend-vanilla-1
-kitsunebi config apply backend-vanilla-1
-kitsunebi config import backend-vanilla-1 plugins/LuckPerms/config.yml
-```
-
-`config apply` snapshots overwritten live files before copying and writes
-`runtime/last-applied.json` under the instance root. It refuses to overwrite
-live drift or conflicts unless `--overwrite-conflicts` is passed.
-
-## Materialize
-
-`materialize` is the production preparation workflow for one instance.
-
-```bash
-kitsunebi materialize backend-vanilla-1
-```
-
-It loads inventory, resolves the target, reports plugin and config differences,
-syncs manual plugin artifacts, applies managed config, and prints runtime
-status. It keeps the same safety behavior as `config apply`.
-
-## Backup and Maintenance
-
-Backup storage and DB snapshots are external, but kitsunebi provides a preflight
-view over the instance paths and plugin policy.
-
-```bash
-kitsunebi backup preflight backend-vanilla-1
-```
-
-Maintenance restart is an explicit workflow and requires confirmation.
-
-```bash
-kitsunebi maintenance restart backend-vanilla-1 --notice "maintenance restart" --confirm
-```
+`/health` and `/ready` are shallow controller probes and do not fan out to
+providers. Authenticated operators can use `/api/v1/health/providers` for
+GameAP panel/node/process-manager, backup, monitoring, DNS, and TCPShield
+detail. Operation event streams re-authorize the actor on every poll, so a
+revoked policy closes an open stream. A GameAP panel outage does not prove
+that daemon-managed processes stopped, and a controller outage does not stop
+running processes or proxies. Operators should inspect operation events,
+adapter evidence, revision conflicts, endpoint resolution, proxy health, and
+backup verification before retrying a failed change.

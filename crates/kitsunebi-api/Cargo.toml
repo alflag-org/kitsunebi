@@ -1,0 +1,34 @@
+[package]
+name = "kitsunebi-api"
+description = "Versioned HTTP API for Kitsunebi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kitsunebi-application.workspace = true
+kitsunebi-domain.workspace = true
+async-trait = "0.1"
+async-stream = "0.3"
+axum = { version = "0.8", features = ["ws", "json", "macros"] }
+futures-core = "0.3"
+hmac = "0.12"
+jsonwebtoken = "9"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+tokio = { version = "1", features = ["sync", "macros", "rt", "time"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true
+
+[features]
+default = []
+local-auth = []

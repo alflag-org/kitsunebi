@@ -1,0 +1,17 @@
+[
+  {
+    "id": 232,
+    "time": "2025-06-09T10:18:55.778Z",
+    "channel": "STABLE",
+    "downloads": {
+      "server:default": {
+        "name": "paper-1.21.4-232.jar",
+        "checksums": {
+          "sha256": "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc"
+        },
+        "size": 51437498,
+        "url": "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar"
+      }
+    }
+  }
+]

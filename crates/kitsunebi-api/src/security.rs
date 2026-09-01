@@ -221,8 +221,11 @@ fn parse_hmac_token(token: &str) -> Option<(u64, &str)> {
 }
 
 fn decode_hex(value: &str) -> Result<[u8; HMAC_DIGEST_BYTES], ()> {
+    if value.len() != HMAC_DIGEST_BYTES * 2 {
+        return Err(());
+    }
     let mut output = [0_u8; HMAC_DIGEST_BYTES];
-    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         output[index] = (hex_value(chunk[0]).ok_or(())? << 4) | hex_value(chunk[1]).ok_or(())?;
     }
     Ok(output)
@@ -253,6 +256,18 @@ fn unix_now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{HMAC_DIGEST_BYTES, decode_hex};
+
+    #[test]
+    fn decode_hex_rejects_non_exact_lengths() {
+        assert!(decode_hex("0").is_err());
+        assert!(decode_hex(&"0".repeat(HMAC_DIGEST_BYTES * 2 + 2)).is_err());
+    }
+}
+
 /// Exact-origin and request-limit settings.
 pub struct SecurityConfig {
     pub allowed_origins: BTreeSet<String>,

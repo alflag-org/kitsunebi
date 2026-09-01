@@ -10,6 +10,13 @@ closed for backup-required plans. The controller binary is
 Static assets are built in `web` with `npm --prefix web run build` and served from the
 configured `KITSUNEBI_WEB_STATIC_ROOT`; they call `/api/v1` from the same origin.
 
+The initial migration creates invariant-enforcing triggers, so the `DATABASE_URL`
+identity must be allowed to run schema DDL and `CREATE TRIGGER`. On a server with
+binary logging enabled, use an appropriately privileged migration path or configure
+`log_bin_trust_function_creators=ON` for the migration, then restore it to `OFF`
+immediately afterward. Runtime-only credentials are not sufficient for initial
+schema setup.
+
 The controller requires `KITSUNEBI_LISTEN_ADDR`, `DATABASE_URL`,
 `GAMEAP_BASE_URL`, `GAMEAP_PAT`, `KITSUNEBI_ARTIFACT_ROOT`,
 `KITSUNEBI_WEB_STATIC_ROOT`, `KITSUNEBI_ALLOWED_ORIGINS`,

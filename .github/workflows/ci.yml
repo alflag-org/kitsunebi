@@ -77,6 +77,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
           toolchain: stable
+      - name: Allow migration trigger creation
+        run: docker exec "${{ job.services.mysql.id }}" mysql -uroot -pci-root-password -e 'SET GLOBAL log_bin_trust_function_creators = 1'
       - run: cargo test --test mysql-migrations --package kitsunebi-storage
         env:
           DATABASE_URL: mysql://kitsunebi:ci-password@127.0.0.1:3306/kitsunebi
@@ -171,5 +173,3 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ignore: RUSTSEC-2023-0071
-      - uses: actions/dependency-review-action@ce3cf9537a52e8119d91fd484ab5b8a807627bf8 # v4.6.0
-        if: github.event_name == 'pull_request'

@@ -215,7 +215,7 @@ async fn persistence_invariants_are_enforced() {
                 &session,
                 unregistered_actor,
                 &format!("unregistered-{suffix}"),
-                &"u".repeat(64),
+                &"a".repeat(64),
             )
             .await,
         Err(StorageError::NotFound {
@@ -352,7 +352,7 @@ async fn persistence_invariants_are_enforced() {
     )
     .unwrap();
     let plan_request_key = format!("migration-plan-{suffix}");
-    let plan_request_hash = "p".repeat(64);
+    let plan_request_hash = "b".repeat(64);
     let plan_audit = AuditEvent {
         actor,
         action: "change.plan".into(),
@@ -395,7 +395,7 @@ async fn persistence_invariants_are_enforced() {
                 &plan,
                 session.id,
                 &plan_request_key,
-                &"x".repeat(64),
+                &"c".repeat(64),
                 &plan_audit,
             )
             .await,

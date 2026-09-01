@@ -123,7 +123,7 @@ echo "public controller boundary"
 request "$controller/live"; expect_status 200; expect_field status live
 request "$controller/health"; expect_status 200; expect_field status healthy
 request "$controller/ready"; expect_status 200; expect_field status ready
-expect_field controller_database.status ready
+expect_field checks.controller_database ready
 request "$controller/api/v1/unknown"; expect_status 404; expect_field error not_found
 request "$controller/"; expect_status 200
 request "$controller/api/v1/services"; expect_status 401; expect_field error unauthorized

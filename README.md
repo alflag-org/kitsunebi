@@ -67,7 +67,21 @@ HTTP requires
 
 ## Core workflows
 
-Read resources through the API or CLI, then mutate through a ChangeSession with
+For routine start, stop, or restart, select a named execution unit, review the
+operation and its effect, then confirm. The controller prepares a five-minute
+plan and performs approval, apply, verification, and acceptance using the
+existing ChangeSession. Planning, approval, apply, verify, accept, and the
+selected lifecycle permission are all required. Conflicts and failures stop
+execution; recorded operations can be inspected in operation history.
+
+```sh
+kitsunebi server list
+kitsunebi server restart 'Service name / cluster-key'
+# For explicitly authorized automation, add --yes.
+```
+
+Advanced changes and recovery retain their explicit approval steps. Read
+resources through the API or CLI, then mutate through a ChangeSession with
 a typed request hash, a persisted plan hash, future expiry, `Idempotency-Key`,
 and `If-Match`. File and artifact bytes are first posted to the session's
 `staged-content` endpoint and plans carry only their digest and size. The

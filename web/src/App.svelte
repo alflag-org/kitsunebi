@@ -7,6 +7,7 @@
   import StateMessage from './lib/components/StateMessage.svelte';
   import ResourceList from './lib/components/ResourceList.svelte';
   import ResourceDetail from './lib/components/ResourceDetail.svelte';
+  import LifecyclePanel from './lib/components/LifecyclePanel.svelte';
   import ChangePanel from './lib/components/ChangePanel.svelte';
   import OperationsPanel from './lib/components/OperationsPanel.svelte';
   import ConsolePanel from './lib/components/ConsolePanel.svelte';
@@ -30,6 +31,7 @@
   let active: Surface = initialActive; let menuOpen = false; let loading = false; let error = ''; let loaded = false; let activeUnsupported = false; let lastObserved = ''; let csrfToken = ''; let sessionReady = false; let sessionError = '';
   let resources: JsonObject[] = []; let selectedResourceId = ''; let selectedServiceId = ''; let selectedUnitId = ''; let selectedChangeId = ''; let changeServices: JsonObject[] = []; let changeClusters: JsonObject[] = []; let changeBindings: JsonObject[] = []; let stagedFiles: StagedFile[] = []; let detailResource: JsonObject | undefined; let actionBusy = false; let actionMessage = '';
   let dashboardLoading = false; let dashboardErrors: Record<string, string> = {}; let dashboardServices: JsonObject[] = []; let dashboardProxies: JsonObject[] = []; let dashboardChanges: JsonObject[] = [];
+  let integrationStatus: Record<string, string> = {};
   let controllerState = 'unknown'; let capabilityState = 'unknown'; let backupMutationState = 'unknown'; let requestController: AbortController | null = null;
 
   function endpointFor(surface: string): string {
@@ -56,6 +58,12 @@
       if (!services.error || !proxies.error || !changes.error || !health.error) markObserved();
     } catch (cause) { if (!isAbort(cause)) { dashboardErrors = { services: 'Controller is unreachable', proxies: 'Controller is unreachable', changes: 'Controller is unreachable', health: 'Controller is unreachable' }; controllerState = 'offline'; capabilityState = 'unknown'; } }
     finally { if (requestController === controller) { requestController = null; dashboardLoading = false; } }
+  }
+
+  async function observeIntegrations() {
+    const result = await api<JsonObject>('/health/providers');
+    if (result.error) { integrationStatus = { backup: 'unavailable', monitoring: 'unavailable' }; return; }
+    integrationStatus = Object.fromEntries(['backup', 'monitoring'].map((name) => [name, String((result.data?.[name] as JsonObject | undefined)?.status ?? 'unknown')]));
   }
 
   async function observeHealth() {
@@ -91,7 +99,7 @@
     if (active === 'Dashboard') { detailResource = undefined; await loadDashboard(); return; }
     const unsupported = unsupportedReasons[active]; if (unsupported) { loading = false; loaded = false; activeUnsupported = true; error = ''; resources = []; return; }
     requestController?.abort(); const controller = new AbortController(); requestController = controller; loading = true; loaded = false; activeUnsupported = false; error = ''; resources = []; detailResource = undefined; actionMessage = '';
-    let path = endpointFor(active); if (active === 'File diff' && selectedUnitId) path = `/execution-units/${encodeURIComponent(selectedUnitId)}/files`; try {
+    let path = endpointFor(active); try {
       if (active === 'Change sessions') {
         const [sessions, services, clusters, bindings] = await Promise.all([api<unknown>('/change-sessions', { signal: controller.signal }), api<unknown>('/services', { signal: controller.signal }), api<unknown>('/clusters', { signal: controller.signal }), api<unknown>('/execution-units', { signal: controller.signal })]);
         if (controller.signal.aborted) return;
@@ -177,7 +185,7 @@
     stagedFiles = [...stagedFiles.filter((item) => !(item.sessionId === file.sessionId && item.path === file.path)), file];
   }
   function unitChange(id: string) { selectedUnitId = id; }
-  onMount(async () => { await initializeSession(); if (active === 'Dashboard') void loadDashboard(); else { void observeHealth(); void loadActive(); } });
+  onMount(async () => { await initializeSession(); void observeIntegrations(); if (active === 'Dashboard') void loadDashboard(); else { void observeHealth(); void loadActive(); } });
 </script>
 
 <svelte:head><title>Kitsunebi · MCPlayNetwork</title><meta name="description" content="MCPlayNetwork service operations" /></svelte:head>
@@ -191,6 +199,8 @@
   <main id="main" class="main">
     <header class="topbar"><button class="menu" aria-label="Open navigation" onclick={() => menuOpen = true}>☰</button><div class="crumb"><span>MCPlayNetwork</span><b>/</b><strong>{active}</strong></div><div class="top-actions"><span class="operator"><i></i> Access session</span><button class="icon-btn" aria-label="Notifications">◔</button><button class="avatar" aria-label="Account menu">AS</button></div></header>
     <div class="content">
+      {#if active === 'Backups / restore' && integrationStatus.backup === 'not_configured'}<StateMessage kind="info" title="Backup provider not configured" detail="Backup creation and restore are unavailable." />{/if}
+      {#if ['Proxy pools', 'Proxy instances'].includes(active) && integrationStatus.monitoring === 'not_configured'}<StateMessage kind="info" title="Connection monitoring not configured" detail="Proxy rollout requires connection-drain evidence and is unavailable." />{/if}
       {#if sessionError}<StateMessage kind="error" title="Authenticated session unavailable" detail={sessionError} />{/if}
       {#if active === 'Dashboard'}
         <div class="page-heading"><div><p class="eyebrow">Operational overview</p><h1>Service topology</h1><p class="lede">Current state across services, runtimes, and change work.</p></div><button class="quiet" onclick={loadDashboard} disabled={dashboardLoading}>{dashboardLoading ? 'Observing…' : 'Refresh state ↻'}</button></div>
@@ -204,7 +214,7 @@
         <div class="page-heading"><div><p class="eyebrow">Capability boundary</p><h1>{active}</h1><p class="lede">This control stays visible so an operator can distinguish unavailable API capability from an empty result.</p></div></div><StateMessage kind="info" title="Disabled by API capability" detail={unsupportedReasons[active]} />
       {:else if active === 'Change sessions'}
         <div class="page-heading"><div><p class="eyebrow">Operate</p><h1>Change sessions</h1><p class="lede">Explicit, reviewable changes with snapshot, plan, verify, accept, or rollback.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh state ↻'}</button></div>
-        {#if actionMessage}<StateMessage kind={actionMessage.startsWith('Operation') || actionMessage.startsWith('Plan') || actionMessage.startsWith('Change Session') ? 'success' : 'error'} title={actionMessage.startsWith('Operation') || actionMessage.startsWith('Plan') || actionMessage.startsWith('Change Session') ? 'Change state updated' : 'Action not applied'} detail={actionMessage} />{/if}<ChangePanel resources={resources} services={changeServices} clusters={changeClusters} bindings={changeBindings} stagedFiles={stagedFiles} selectedId={selectedChangeId} loading={loading} error={error} unsupported={activeUnsupported} csrfAvailable={Boolean(sessionReady && csrfToken)} busy={actionBusy} onSelect={(id) => selectedChangeId = id} onBegin={beginChangeSession} onAction={performChangeAction} onStageContent={(bytes, classification) => stageContent(selectedChangeId, bytes, classification)} />
+        {#if actionMessage}<StateMessage kind={actionMessage.startsWith('Operation') || actionMessage.startsWith('Plan') || actionMessage.startsWith('Change Session') ? 'success' : 'error'} title={actionMessage.startsWith('Operation') || actionMessage.startsWith('Plan') || actionMessage.startsWith('Change Session') ? 'Change state updated' : 'Action not applied'} detail={actionMessage} />{/if}<ChangePanel {csrfToken} resources={resources} services={changeServices} clusters={changeClusters} bindings={changeBindings} stagedFiles={stagedFiles} selectedId={selectedChangeId} loading={loading} error={error} unsupported={activeUnsupported} csrfAvailable={Boolean(sessionReady && csrfToken)} busy={actionBusy} onSelect={(id) => selectedChangeId = id} onBegin={beginChangeSession} onAction={performChangeAction} onStageContent={(bytes, classification) => stageContent(selectedChangeId, bytes, classification)} />
       {:else if active === 'Lifecycle / decisions'}
         <div class="page-heading"><div><p class="eyebrow">Govern</p><h1>Lifecycle / decisions</h1><p class="lede">Review the current service lifecycle. Transitions are composed as typed steps in a Change Session.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh services ↻'}</button></div>
         <StateMessage kind="info" title="Lifecycle changes use Change Sessions" detail="Open Change sessions to prepare, approve, apply, verify, and accept or roll back a lifecycle transition." />
@@ -212,11 +222,12 @@
       {:else if active === 'Operations'}
         <div class="page-heading"><div><p class="eyebrow">Operate</p><h1>Operations</h1><p class="lede">Observe operation progress from the authenticated SSE stream.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh state ↻'}</button></div><OperationsPanel resources={resources} loading={loading} error={error} unsupported={activeUnsupported} />
       {:else if active === 'Execution units'}
-        <div class="page-heading"><div><p class="eyebrow">Observe</p><h1>Execution units</h1><p class="lede">Inspect persisted GameAP bindings and observed runtime capabilities. Lifecycle changes are planned from a Change Session.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh units ↻'}</button></div><ResourceList title="Execution Units" description="Persisted bindings returned for this access scope." endpoint="/api/v1/execution-units" resources={resources} loading={loading} error={error} unsupported={activeUnsupported} onSelect={unitChange} />
+        <div class="page-heading"><div><p class="eyebrow">Observe</p><h1>Execution units</h1><p class="lede">Inspect persisted GameAP bindings and observed runtime capabilities. Select a target and review the operation before executing.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh units ↻'}</button></div><ResourceList title="Execution Units" description="Persisted bindings returned for this access scope." endpoint="/api/v1/execution-units" resources={resources} loading={loading} error={error} unsupported={activeUnsupported} onSelect={unitChange} />
+        <LifecyclePanel units={resources} {csrfToken} />
       {:else if active === 'Console'}
         <div class="page-heading"><div><p class="eyebrow">Operate</p><h1>Console</h1><p class="lede">Kitsunebi-brokered WebSocket console for a selected Execution Unit.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh units ↻'}</button></div><ResourceList title="Execution Units" description="Choose the backend binding before connecting to Console." endpoint="/api/v1/execution-units" resources={resources} loading={loading} error={error} unsupported={activeUnsupported} onSelect={unitChange} /><ConsolePanel selectedUnitId={selectedUnitId} csrfToken={csrfToken} onUnitChange={unitChange} unsupported={activeUnsupported} />
       {:else if active === 'Files' || active === 'File diff'}
-        <div class="page-heading"><div><p class="eyebrow">Observe</p><h1>{active === 'Files' ? 'Files' : 'File diff'}</h1><p class="lede">Browse, read, diff, and download through the brokered file API. Changes are staged in Change Sessions.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh units ↻'}</button></div><ResourceList title="Execution Units" description="Select the binding whose files you want to inspect." endpoint="/api/v1/execution-units" resources={resources} loading={loading} error={error} unsupported={activeUnsupported} onSelect={unitChange} /><FilesPanel initialUnitId={selectedUnitId} sessionId={selectedChangeId} onUnitChange={unitChange} unsupported={activeUnsupported} csrfAvailable={Boolean(sessionReady && csrfToken)} onStageContent={(bytes, classification) => stageContent(selectedChangeId, bytes, classification)} onStagedFile={recordStagedFile} />
+        <div class="page-heading"><div><p class="eyebrow">Observe</p><h1>{active === 'Files' ? 'Files' : 'File diff'}</h1><p class="lede">Browse, read, diff, and download through the brokered file API. Changes are staged in Change Sessions.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh units ↻'}</button></div><ResourceList title="Execution Units" description="Select the binding whose files you want to inspect." endpoint="/api/v1/execution-units" resources={resources} loading={loading} error={error} unsupported={activeUnsupported} onSelect={unitChange} /><FilesPanel units={resources} initialUnitId={selectedUnitId} sessionId={selectedChangeId} onUnitChange={unitChange} unsupported={activeUnsupported} csrfAvailable={Boolean(sessionReady && csrfToken)} onStageContent={(bytes, classification) => stageContent(selectedChangeId, bytes, classification)} onStagedFile={recordStagedFile} />
       {:else if active === 'Service detail'}
         <div class="page-heading"><div><p class="eyebrow">Observe</p><h1>Service detail</h1><p class="lede">Inspect one Service's desired and observed state before planning a mutation.</p></div><button class="quiet" onclick={loadActive} disabled={loading}>{loading ? 'Loading…' : 'Refresh state ↻'}</button></div>{#if selectedServiceId}<ResourceDetail title="Service detail" endpoint={`/api/v1${endpointFor(active)}`} resource={detailResource} loading={loading} error={error} unsupported={activeUnsupported} onBack={backToServices} />{:else}<ResourceList title="Services" description="Select a Service to open its current detail." endpoint="/api/v1/services" resources={resources} loading={loading} error={error} unsupported={activeUnsupported} onSelect={selectResource} />{/if}
       {:else}

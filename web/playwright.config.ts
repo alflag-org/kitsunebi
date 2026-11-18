@@ -9,7 +9,8 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.KITSUNEBI_E2E_URL ?? 'http://127.0.0.1:4173',
-    channel: 'chrome',
+    channel: process.env.KITSUNEBI_E2E_CHROMIUM_EXECUTABLE ? undefined : 'chrome',
+    launchOptions: { executablePath: process.env.KITSUNEBI_E2E_CHROMIUM_EXECUTABLE },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     ...devices['Desktop Chrome']

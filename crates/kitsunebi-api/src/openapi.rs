@@ -96,6 +96,35 @@ pub fn openapi_document() -> Value {
         operation["operationId"] = Value::String(operation_id_for_path(path));
         paths.insert(path.to_owned(), json!({"post": operation}));
     }
+    for (path, request, response) in [
+        (
+            "/api/v1/execution-units/{id}/lifecycle/prepare",
+            "LifecycleRequest",
+            "LifecyclePreview",
+        ),
+        (
+            "/api/v1/change-sessions/{id}/execute-lifecycle",
+            "LifecycleConfirmation",
+            "Operation",
+        ),
+    ] {
+        paths.insert(path.into(), json!({"post": {
+            "operationId": operation_id_for_path(path),
+            "summary": "Prepare or execute a confirmed routine lifecycle change",
+            "security": [{"cloudflareAccess": []}],
+            "x-permissions": ["change.plan", "change.approve", "change.apply", "change.verify", "change.accept"],
+            "description": "Also requires the selected lifecycle action permission. Preparation persists a five-minute plan; execution uses that exact plan and never refreshes confirmed conditions. Browser requests require Origin and X-CSRF-Token.",
+            "parameters": [
+                {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}},
+                {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "maxLength": 128}}
+            ],
+            "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": format!("#/components/schemas/{request}")}}}},
+            "responses": {
+                "200": {"description": "Persisted result", "content": {"application/json": {"schema": {"$ref": format!("#/components/schemas/{response}")}}}},
+                "403": {"description": "Permission denied"}, "409": {"description": "Stale or unverifiable operation"}, "502": {"description": "Provider unavailable"}
+            }
+        }}));
+    }
     paths.insert(
         "/api/v1/artifacts/discover".to_owned(),
         json!({
@@ -833,11 +862,16 @@ fn schemas() -> Value {
                 "message": {"type": ["string", "null"]}, "progress": {"type": ["integer", "null"], "minimum": 0, "maximum": 100}
             }
         },
+        "LifecycleRequest": {"type": "object", "additionalProperties": false, "required": ["action"], "properties": {"action": {"type": "string", "enum": ["start", "stop", "restart"]}}},
+        "LifecycleConfirmation": {"type": "object", "additionalProperties": false, "required": ["plan_id", "plan_hash"], "properties": {"plan_id": {"type": "string", "format": "uuid"}, "plan_hash": {"type": "string"}}},
+        "LifecyclePreview": {"type": "object", "required": ["session_id", "plan_id", "plan_hash", "expires_at", "action", "target_name", "running", "impact"], "properties": {
+            "session_id": {"type": "string", "format": "uuid"}, "plan_id": {"type": "string", "format": "uuid"}, "plan_hash": {"type": "string"}, "expires_at": {"type": "integer"}, "action": {"type": "string", "enum": ["start", "stop", "restart"]}, "target_name": {"type": "string"}, "running": {"type": "boolean"}, "impact": {"type": "string"}
+        }},
         "FileEntryList": {"type": "array", "items": {"$ref": "#/components/schemas/FileEntry"}},
         "FileEntry": {
             "type": "object",
-            "required": ["path", "size", "digest", "classification"],
-            "properties": {"path": {"type": "string"}, "size": {"type": "integer"}, "digest": {"type": "string"}, "classification": {"type": "string"}}
+            "required": ["path", "size", "digest", "is_directory", "classification"],
+            "properties": {"path": {"type": "string"}, "size": {"type": "integer"}, "digest": {"type": ["string", "null"], "description": "Null until explicitly fetched; listings do not read file bodies."}, "is_directory": {"type": "boolean"}, "classification": {"type": "string"}}
         },
         "FileRead": {
             "type": "object",

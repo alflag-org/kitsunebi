@@ -1,5 +1,33 @@
 # Operations
 
+## Routine lifecycle operations
+
+In Execution units or Change sessions, choose the named target and Start,
+Stop, or Restart, then review and confirm. Stop and restart disconnect players.
+The CLI uses the same server workflow: `kitsunebi server list`, followed by
+`kitsunebi server restart 'Service name / cluster-key'`. It asks for confirmation;
+`--yes` explicitly confirms an automated request. Duplicate names are rejected
+by the CLI rather than selecting an arbitrary binding.
+File commands use the same target names, for example
+`kitsunebi files read 'Service name / cluster-key' --path server.properties`.
+
+`POST /api/v1/execution-units/{id}/lifecycle/prepare` resolves the persisted
+binding, current revision, and provider status and returns a persisted plan
+with a five-minute expiry. `POST /api/v1/change-sessions/{id}/execute-lifecycle`
+confirms that exact plan. Clients retain the returned identifiers internally;
+operators do not enter hashes or revisions. Both requests require an
+`Idempotency-Key` and the normal authentication/CSRF checks. The execution
+request requires planning, approval, apply, verify, accept, and the selected
+lifecycle permission. It never grants approval rights implicitly.
+
+The controller records the existing change and operation evidence, verifies
+provider state, and accepts only verified results. Repeating the same
+confirmation returns the stored operation and does not repeat a completed or
+failed provider mutation. A conflict requires inspecting operation history
+and preparing a newly confirmed change. A lost connection does not imply the
+provider operation failed. Advanced changes and explicit recovery remain in
+the expandable section of Change sessions.
+
 ## Change control
 
 All mutations use a persisted ChangeSession. The controller observes the
@@ -92,6 +120,11 @@ separate typed steps, and activation is bound to the change session and
 revision. Managed configuration carries its owner, path classification,
 expected digest, and staged bytes; secrets are never ordinary configuration.
 
+File listings return provider names, sizes, and directory flags, with `digest:
+null` for content that has not been read. Browsing a directory does not download
+its entries. Read, diff, and write verification fetch the selected file; writes
+still compare the expected pre-change digest, including for empty files.
+
 SFTP is an operator-controlled path using OpenSSH credentials outside the
 controller. A scan records GameAP file hashes before and after an explicit
 change and stores the endpoint and session evidence. It makes no SFTP-server or
@@ -101,6 +134,21 @@ not overwritten by configuration sync.
 Endpoint updates resolve the target through the DNS adapter, compare the
 expected record and revision, and verify endpoint health after the change.
 DNS/TCPShield/monitoring unavailability or external drift blocks acceptance.
+
+## Optional integrations
+
+Backup and connection monitoring are optional configuration groups. Their
+absence does not block resource lists, status, files, or ordinary lifecycle
+operations. Authenticated `/api/v1/health/providers` reports each as
+`not_configured` or `configured`; configuration is not evidence of health or
+successful integration. The backup and proxy screens show missing configuration.
+
+Backup-required operations still need verified backup evidence. Proxy rollout
+requires configured connection monitoring before any rollout effects and fresh
+zero-connection evidence before stopping the old runtime. TCP reachability is
+not proof of drained connections. Provider timeouts and incomplete observations
+remain errors. See the backup and monitoring crate READMEs for the existing
+HTTP contracts; these contracts do not provision an external service.
 
 ## Backup and restore
 

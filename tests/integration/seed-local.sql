@@ -22,7 +22,7 @@ VALUES ('00000000-0000-4000-8000-000000000021', 'plugin', 'Fixture plugin', '1.0
 INSERT IGNORE INTO artifact_set_items (artifact_set_id, artifact_id) VALUES ('00000000-0000-4000-8000-000000000020', '00000000-0000-4000-8000-000000000021');
 INSERT IGNORE INTO config_baselines (id, `key`, manifest, manifest_digest, metadata) VALUES ('00000000-0000-4000-8000-000000000022', 'fixture-config', '{"digest":"cbceed45366c6ea11a10fd9a171040b48339ca04eda6424bdf26568a2e7fc752","files":[{"path":"configs/example.conf","digest":"4f0d571ed3f2c25fb1151b1b6e0f668d317f8c3a0370ea48e9ec4fbce99c7719","classification":"mutable_config"},{"path":"configs/integration-upload.conf","digest":"3a2063bd16edb6a147baa60030b66e0d8ad8a0f11ef326e9c0c28e6afd59032b","classification":"artifact"},{"path":"secrets/token","digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","classification":"secret"},{"path":"state/server.dat","digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","classification":"state"}]}', 'cbceed45366c6ea11a10fd9a171040b48339ca04eda6424bdf26568a2e7fc752', '{}');
 INSERT IGNORE INTO cluster_revisions (id, cluster_id, revision_number, runtime_profile_id, minecraft_version, java_requirement, artifact_set_id, config_baseline_id, world_bindings, endpoint_bindings, placement_requirements, resource_requirements, health_checks, startup_parameters, metadata)
-VALUES ('00000000-0000-4000-8000-000000000023', '00000000-0000-4000-8000-0000000000a2', 1, '00000000-0000-4000-8000-000000000010', '1.21.4', 'java-21', '00000000-0000-4000-8000-000000000020', '00000000-0000-4000-8000-000000000022', '[]', '[]', '{}', '{}', '[]', '{}', '{}');
+VALUES ('00000000-0000-4000-8000-000000000023', '00000000-0000-4000-8000-0000000000a2', 1, '00000000-0000-4000-8000-000000000010', '1.21.4', 'java-21', '00000000-0000-4000-8000-000000000020', '00000000-0000-4000-8000-000000000022', '[]', '[]', '{"process_managers":[],"required_capabilities":[]}', '{}', '[]', '[]', '{}');
 UPDATE clusters SET current_revision_id = '00000000-0000-4000-8000-000000000023' WHERE id = '00000000-0000-4000-8000-0000000000a2';
 UPDATE services SET current_cluster_id = CASE id WHEN '00000000-0000-4000-8000-0000000000a1' THEN '00000000-0000-4000-8000-0000000000a2' WHEN '00000000-0000-4000-8000-0000000000b1' THEN '00000000-0000-4000-8000-0000000000b2' ELSE current_cluster_id END WHERE id IN ('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000b1');
 
@@ -41,3 +41,12 @@ INSERT IGNORE INTO endpoint_bindings (id, revision_id, endpoint_id, cluster_id, 
 INSERT IGNORE INTO access_policy_bindings (id, policy_id, service_id) VALUES ('00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-0000000000a1');
 INSERT IGNORE INTO gameap_bindings (id, service_id, cluster_id, execution_unit_target, world_id, proxy_instance_id, execution_unit_ref, node_id, metadata)
 VALUES ('00000000-0000-4000-8000-0000000000a3', NULL, '00000000-0000-4000-8000-0000000000a2', NULL, NULL, NULL, '6', '1', '{}'), ('00000000-0000-4000-8000-0000000000b3', NULL, '00000000-0000-4000-8000-0000000000b2', NULL, NULL, NULL, '7', '1', '{}');
+
+-- An operator with lifecycle rights but no approval permission cannot use the
+-- routine execution endpoint to acquire approval implicitly.
+INSERT IGNORE INTO actor_identities (actor_id, kind, subject, service_id)
+VALUES ('00000000-0000-4000-8000-0000000000ab', 'browser', '00000000-0000-4000-8000-0000000000ab', NULL);
+INSERT IGNORE INTO access_policies (id, `key`, policy)
+VALUES ('00000000-0000-4000-8000-000000000012', 'fixture-no-approval', '[{"actor":"00000000-0000-4000-8000-0000000000ab","role":"operator","service_scope":"00000000-0000-4000-8000-0000000000a1","permissions":["service.read","change.plan","change.apply","change.verify","change.accept","lifecycle.start","lifecycle.stop","lifecycle.restart"]}]');
+INSERT IGNORE INTO access_policy_bindings (id, policy_id, service_id)
+VALUES ('00000000-0000-4000-8000-000000000013', '00000000-0000-4000-8000-000000000012', '00000000-0000-4000-8000-0000000000a1');

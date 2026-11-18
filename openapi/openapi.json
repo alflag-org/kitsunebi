@@ -971,7 +971,14 @@
             "type": "string"
           },
           "digest": {
-            "type": "string"
+            "description": "Null until explicitly fetched; listings do not read file bodies.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_directory": {
+            "type": "boolean"
           },
           "path": {
             "type": "string"
@@ -984,6 +991,7 @@
           "path",
           "size",
           "digest",
+          "is_directory",
           "classification"
         ],
         "type": "object"
@@ -1020,6 +1028,86 @@
       },
       "Health": {
         "additionalProperties": true,
+        "type": "object"
+      },
+      "LifecycleConfirmation": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_hash": {
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_hash"
+        ],
+        "type": "object"
+      },
+      "LifecyclePreview": {
+        "properties": {
+          "action": {
+            "enum": [
+              "start",
+              "stop",
+              "restart"
+            ],
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "integer"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "plan_hash": {
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "plan_id",
+          "plan_hash",
+          "expires_at",
+          "action",
+          "target_name",
+          "running",
+          "impact"
+        ],
+        "type": "object"
+      },
+      "LifecycleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "start",
+              "stop",
+              "restart"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
         "type": "object"
       },
       "Live": {
@@ -3659,6 +3747,75 @@
         "x-permission": "change.approve"
       }
     },
+    "/api/v1/change-sessions/{id}/execute-lifecycle": {
+      "post": {
+        "description": "Also requires the selected lifecycle action permission. Preparation persists a five-minute plan; execution uses that exact plan and never refreshes confirmed conditions. Browser requests require Origin and X-CSRF-Token.",
+        "operationId": "ApiV1ChangeSessionsIdExecuteLifecycle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleConfirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "description": "Persisted result"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "409": {
+            "description": "Stale or unverifiable operation"
+          },
+          "502": {
+            "description": "Provider unavailable"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Prepare or execute a confirmed routine lifecycle change",
+        "x-permissions": [
+          "change.plan",
+          "change.approve",
+          "change.apply",
+          "change.verify",
+          "change.accept"
+        ]
+      }
+    },
     "/api/v1/change-sessions/{id}/plan": {
       "post": {
         "operationId": "ApiV1ChangeSessionsIdPlan",
@@ -4470,6 +4627,75 @@
         ],
         "summary": "Read a file",
         "x-permission": "files.read"
+      }
+    },
+    "/api/v1/execution-units/{id}/lifecycle/prepare": {
+      "post": {
+        "description": "Also requires the selected lifecycle action permission. Preparation persists a five-minute plan; execution uses that exact plan and never refreshes confirmed conditions. Browser requests require Origin and X-CSRF-Token.",
+        "operationId": "ApiV1ExecutionUnitsIdLifecyclePrepare",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecyclePreview"
+                }
+              }
+            },
+            "description": "Persisted result"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "409": {
+            "description": "Stale or unverifiable operation"
+          },
+          "502": {
+            "description": "Provider unavailable"
+          }
+        },
+        "security": [
+          {
+            "cloudflareAccess": []
+          }
+        ],
+        "summary": "Prepare or execute a confirmed routine lifecycle change",
+        "x-permissions": [
+          "change.plan",
+          "change.approve",
+          "change.apply",
+          "change.verify",
+          "change.accept"
+        ]
       }
     },
     "/api/v1/health/providers": {

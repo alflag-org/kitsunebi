@@ -172,6 +172,15 @@ pub struct ExecutionStatus {
     pub state_hash: String,
     pub node: String,
 }
+/// Directory metadata; a listing never implies that file bytes were observed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileListingEntry {
+    pub path: String,
+    pub classification: FileClassification,
+    pub size: u64,
+    pub is_directory: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileEntry {
     pub path: String,
@@ -353,7 +362,7 @@ pub trait ExecutionBackend: Send + Sync {
         &self,
         binding: &GameAPBinding,
         path: &str,
-    ) -> Result<Vec<FileEntry>, ApplicationError>;
+    ) -> Result<Vec<FileListingEntry>, ApplicationError>;
     async fn read_file(
         &self,
         binding: &GameAPBinding,
@@ -5350,7 +5359,7 @@ impl<B: ExecutionBackend, A: Authorizer, C: AuditSink> ExecutionService<B, A, C>
         path: &str,
         actor: ActorId,
         service: ServiceId,
-    ) -> Result<Vec<FileEntry>, ApplicationError> {
+    ) -> Result<Vec<FileListingEntry>, ApplicationError> {
         self.auth(actor, service, Permission::FilesRead).await?;
         let scope = audit_scope_for_binding(service, binding)?;
         self.audit_result(
@@ -9843,7 +9852,7 @@ mod tests {
             &self,
             _: &GameAPBinding,
             _: &str,
-        ) -> Result<Vec<FileEntry>, ApplicationError> {
+        ) -> Result<Vec<FileListingEntry>, ApplicationError> {
             Ok(Vec::new())
         }
 

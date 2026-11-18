@@ -99,7 +99,7 @@ pub fn evidence_hash(node_id: u64, config: &str, manager: &ProcessManager) -> St
     digest.update(node_id.to_be_bytes());
     digest.update(config.as_bytes());
     digest.update(serde_json::to_string(manager).unwrap_or_else(|_| "unknown".to_owned()));
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 #[cfg(target_arch = "wasm32")]

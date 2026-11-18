@@ -15,7 +15,7 @@ migration command. `KITSUNEBI_REQUIRE_MYSQL=1` rejects a missing URL; workspace
 unit tests otherwise report DB cases as not run. The suite checks repeated
 migration and domain persistence. UUID-isolated audited fixtures live until
 the disposable schema is discarded; append-only audit references are retained.
-Do not use a production database. The web application uses npm and
+Do not use a production database. The web application uses Node.js 22.17 or newer on the Node 22 LTS line and npm. It
 must be built before serving static assets:
 
 ```sh

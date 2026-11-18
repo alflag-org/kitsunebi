@@ -126,6 +126,7 @@ pub struct AccessClaims {
     pub aud: Value,
     pub sub: String,
     pub exp: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub nbf: Option<u64>,
     pub iat: Option<u64>,
     pub email: Option<String>,

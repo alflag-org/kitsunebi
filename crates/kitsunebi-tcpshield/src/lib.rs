@@ -777,7 +777,7 @@ pub fn normalized_hash(v: &BackendSet) -> String {
     let b = serde_json::to_vec(&v.normalized()).expect("serializable");
     let mut h = Sha256::new();
     h.update(b);
-    format!("{:x}", h.finalize())
+    hex::encode(h.finalize())
 }
 #[cfg(test)]
 mod tests {

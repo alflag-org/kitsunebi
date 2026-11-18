@@ -2308,7 +2308,7 @@ impl GameAPBinding {
         field(&mut bytes, &target);
         let mut hash = Sha256::new();
         hash.update(bytes);
-        format!("{:x}", hash.finalize())
+        hex::encode(hash.finalize())
     }
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -2423,7 +2423,7 @@ fn baseline_digest(entries: &[ConfigBaselineEntry]) -> String {
             bytes.extend_from_slice(value.as_bytes());
         }
     }
-    format!("{:x}", Sha256::digest(bytes))
+    hex::encode(Sha256::digest(bytes))
 }
 
 /// Typed ownership and execution context for an audit event. A service is
@@ -4300,7 +4300,7 @@ impl PlanDescriptor {
     pub fn compute_hash(&self) -> String {
         let mut h = Sha256::new();
         h.update(self.canonical_bytes());
-        format!("{:x}", h.finalize())
+        hex::encode(h.finalize())
     }
 
     pub fn validate(&self) -> Result<(), DomainError> {

@@ -4725,7 +4725,7 @@ impl ChangeRequest {
             canonical.push_str(&value);
         }
         canonical.push(']');
-        Ok(format!("{:x}", Sha256::digest(canonical.as_bytes())))
+        Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
     }
 }
 
@@ -4804,7 +4804,7 @@ impl SftpScanRequest {
             field(&mut canonical, path.classification.as_str().to_owned());
         }
         canonical.push(']');
-        Ok(format!("{:x}", Sha256::digest(canonical.as_bytes())))
+        Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
     }
 }
 

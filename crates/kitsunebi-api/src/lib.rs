@@ -70,7 +70,7 @@ pub fn plan_hash(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     h.update(bytes);
-    format!("{:x}", h.finalize())
+    hex::encode(h.finalize())
 }
 /// Normalize and validate a GameAP-relative path.
 pub fn validate_file_path(path: &str) -> Result<String, ApiError> {

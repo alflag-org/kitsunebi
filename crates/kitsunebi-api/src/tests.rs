@@ -153,7 +153,7 @@ fn signed_with_kid(claims: AccessClaims, algorithm: Algorithm, kid: &str) -> Str
     let key = if algorithm == Algorithm::RS256 {
         EncodingKey::from_rsa_pem(TEST_PRIVATE_KEY).unwrap()
     } else {
-        EncodingKey::from_secret(b"test-only-secret")
+        EncodingKey::from_secret(b"test-only-secret").unwrap()
     };
     encode(&header, &claims, &key).unwrap()
 }

@@ -30,7 +30,8 @@ export type OperationEvent = {
 export type FileEntry = {
   path: string;
   size: number;
-  digest: string;
+  digest: string | null;
+  is_directory: boolean;
   classification: string;
 };
 

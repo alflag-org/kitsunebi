@@ -227,3 +227,5 @@ assert updates[0]["body"]["json"]["path"] == "configs/example.conf"
 assert updates[0]["body"]["json"]["content"] == "fixture=true\n# staged by change session\n"
 PY
 echo "integration assertions passed"
+
+"$python" "$(dirname "$0")/routine.py"

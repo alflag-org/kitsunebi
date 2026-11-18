@@ -72,6 +72,7 @@ function request(state: MockState, suffix: string, method = 'POST'): CapturedReq
 async function openChangeSession(page: Page): Promise<void> {
   await page.goto('/change-sessions');
   await expect(page.getByRole('heading', { name: 'Change sessions' })).toBeVisible();
+  await page.getByText('Advanced changes and recovery', { exact: true }).click();
   await page.getByLabel('Service').first().selectOption(service);
   await page.getByLabel('Cluster').first().selectOption(cluster);
   await page.getByRole('button', { name: 'Begin session', exact: true }).click();
@@ -149,6 +150,7 @@ test('does not advance after a stale plan response', async ({ page }) => {
 test('allows explicit rollback for an aborted session with persisted operation evidence', async ({ page }) => {
   const state = installMock(page, { aborted: true });
   await page.goto('/change-sessions');
+  await page.getByText('Advanced changes and recovery', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Smoke session', exact: true })).toBeVisible();
   await expect(page.getByText(`Operation ${operationId}`)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
@@ -161,4 +163,64 @@ test('allows explicit rollback for an aborted session with persisted operation e
   const payload = ((rollback.body as Record<string, unknown>).payload as Record<string, unknown>).value as Record<string, unknown>;
   expect(payload).toEqual(expect.objectContaining({ operation_id: operationId, reason: 'Restore the retained inverse evidence.' }));
   expect(state.requests.filter((entry) => entry.url.endsWith('/apply'))).toHaveLength(0);
+});
+
+async function installRoutine(page: Page, status = 200) {
+  const state = installMock(page);
+  const calls: CapturedRequest[] = [];
+  await page.route('**/lifecycle/prepare', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ action: 'restart' });
+    return json(route, { session_id: sessionId, plan_id: planId, plan_hash: persistedPlanHash, expires_at: Math.floor(Date.now() / 1000) + 300, target_name: 'Smoke binding', running: true, action: 'restart', impact: 'Connected players will be disconnected.' });
+  });
+  await page.route('**/execute-lifecycle', async (route) => {
+    calls.push({ method: 'POST', url: route.request().url(), headers: route.request().headers(), body: route.request().postDataJSON() });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return status === 200 ? json(route, { id: operationId, status: 'accepted' }) : json(route, { error: status === 409 ? 'conflict' : 'backend_unavailable' }, status);
+  });
+  await page.goto('/execution-units');
+  await page.getByLabel('Target', { exact: true }).selectOption(binding);
+  return { state, calls };
+}
+
+test('routine restart confirms the named target without internal inputs and prevents duplicate submission', async ({ page }) => {
+  const { calls } = await installRoutine(page);
+  await expect(page.locator('input')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Review operation' }).click();
+  await expect(page.getByText(/Connected players will be disconnected/)).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm restart' }).dblclick();
+  await expect(page.getByRole('status')).toContainText('completed and verified');
+  expect(calls).toHaveLength(1);
+  expect(calls[0].body).toEqual({ plan_id: planId, plan_hash: persistedPlanHash });
+  expect(calls[0].headers['x-csrf-token']).toBe('csrf-e2e');
+});
+
+for (const status of [409, 502]) {
+  test(`routine failure ${status} does not report completion or prepare a replacement`, async ({ page }) => {
+    const { calls } = await installRoutine(page, status);
+    await page.getByRole('button', { name: 'Review operation' }).click();
+    await page.getByRole('button', { name: 'Confirm restart' }).click();
+    await expect(page.getByRole('alert')).toContainText(/operation history/);
+    await expect(page.getByText('Operation completed and verified.')).toHaveCount(0);
+    expect(calls).toHaveLength(1);
+  });
+}
+
+test('routine permission denial stops before confirmation', async ({ page }) => {
+  await installRoutine(page);
+  await page.route('**/lifecycle/prepare', (route) => json(route, { error: 'forbidden' }, 403));
+  await page.getByRole('button', { name: 'Review operation' }).click();
+  await expect(page.getByRole('alert')).toContainText('approval');
+  await expect(page.getByRole('button', { name: 'Confirm restart' })).toHaveCount(0);
+});
+
+test('listing accepts missing digests without reading every file', async ({ page }) => {
+  const state = installMock(page);
+  await page.route('**/files?**', (route) => json(route, [{ path: 'server.properties', size: 0, digest: null, is_directory: false, classification: 'mutable_config' }]));
+  await page.goto('/files');
+  await page.getByRole('combobox', { name: 'Execution Unit', exact: true }).selectOption(binding);
+  await page.getByRole('button', { name: 'Browse', exact: true }).click();
+  await expect(page.getByText(/digest not fetched/)).toBeVisible();
+  expect(state.requests.filter((value) => /\/(read|download)$/.test(value.url))).toHaveLength(0);
+  await page.getByRole('button', { name: /server.properties/ }).click();
+  await expect.poll(() => state.requests.filter((value) => value.url.endsWith('/read')).length).toBe(1);
 });

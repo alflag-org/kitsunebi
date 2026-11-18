@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LifecyclePanel from "./LifecyclePanel.svelte";
+  export let csrfToken = "";
   import { bindingMatchesScope, resourceLabel, resourceValue } from '../api';
   import { buildChangePlan, buildPlanStep, PLAN_STEP_KINDS, type PlanStepKind, type StagedContent, type StagedFile } from '../changePlan';
   import type { JsonObject } from '../types';
@@ -141,6 +143,8 @@
   }
 </script>
 
+<LifecyclePanel units={bindings} {csrfToken} />
+<details><summary>Advanced changes and recovery</summary>
 <section class="change-workspace" aria-labelledby="change-title">
   <div class="change-intro"><div><p class="eyebrow">Persisted Change Session</p><h2 id="change-title">Observe → plan → approve → apply → verify → accept</h2><p>Every write becomes one closed typed step. Provider identifiers, state hashes, backup references, and staged bytes are recorded before apply.</p></div><span class="endpoint-label">/api/v1/change-sessions</span></div>
   {#if loading}<div class="state-message loading"><span class="state-mark">…</span><div><strong>Loading change sessions…</strong><span>Reading the controller record before enabling operations.</span></div></div>
@@ -157,3 +161,5 @@
       {#if planId}<p class="muted-copy">Plan {planId} · hash {planHash}</p>{/if}{#if operationId || operationIdFor(selected)}<p class="muted-copy">Operation {operationId || operationIdFor(selected)}</p>{/if}{#if verificationStatus}<p class="muted-copy">Verification status: {verificationStatus}</p>{/if}<label>Rollback reason<input bind:value={rollbackReason} placeholder="Required for rollback" autocomplete="off" /></label>{#if !csrfAvailable}<p class="disabled-reason">State-changing actions are disabled because no same-origin CSRF session is available.</p>{/if}<div class="workflow-actions"><button class="action-button" disabled={busy || sessionState !== 'editing' || !csrfAvailable} onclick={() => run('plan')}>Plan</button><button class="action-button" disabled={busy || !planId || !planHash || !csrfAvailable || !['editing', 'ready'].includes(sessionState)} onclick={() => run('approve')}>Approve</button><button class="action-button" disabled={busy || !planId || !planHash || !csrfAvailable || sessionState !== 'ready'} onclick={() => run('apply')}>Apply</button><button class="action-button" disabled={busy || !(operationId || operationIdFor(selected)) || !csrfAvailable || sessionState !== 'verifying' || verified} onclick={() => run('verify')}>Verify</button><button class="action-button" disabled={busy || !(operationId || operationIdFor(selected)) || !csrfAvailable || !['verifying'].includes(sessionState) || !verified} onclick={() => run('accept')}>Accept</button><button class="action-button danger" disabled={busy || !(operationId || operationIdFor(selected)) || !rollbackReason.trim() || !csrfAvailable || !['applying', 'verifying', 'aborted'].includes(sessionState)} onclick={() => run('rollback')}>Rollback</button></div>{:else}<p class="muted-copy">Select a persisted session to inspect its scope and plan work.</p>{/if}</div></div>{/if}
   {/if}
 </section>
+
+</details>

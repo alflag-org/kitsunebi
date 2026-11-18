@@ -7,11 +7,15 @@ then run:
 ```sh
 cargo fmt --all -- --check
 cargo test --workspace --all-features
-cargo test --test mysql-migrations --package kitsunebi-storage
+KITSUNEBI_REQUIRE_MYSQL=1 cargo test --test mysql-migrations --package kitsunebi-storage
 ```
 
-The MySQL test is skipped unless `DATABASE_URL` is set; it checks first and
-second migration plus domain persistence. The web application uses npm and
+`DATABASE_URL` must point to a disposable test MySQL schema for the dedicated
+migration command. `KITSUNEBI_REQUIRE_MYSQL=1` rejects a missing URL; workspace
+unit tests otherwise report DB cases as not run. The suite checks repeated
+migration and domain persistence. UUID-isolated audited fixtures live until
+the disposable schema is discarded; append-only audit references are retained.
+Do not use a production database. The web application uses npm and
 must be built before serving static assets:
 
 ```sh
@@ -19,6 +23,7 @@ npm --prefix web ci --no-audit --no-fund
 npm --prefix web run check
 npm --prefix web test
 npm --prefix web run build
+npm --prefix web run e2e
 ```
 
 Keep `openapi/openapi.json` aligned with the versioned router and OpenAPI 3.1
@@ -71,3 +76,11 @@ proxy-drain behavior. Run `tests/integration/real-gameap.sh` only with the
 explicit
 disposable-server consent and after daemon enrollment; it emits an attestation
 only after a connected GameAP 4.x daemon and lifecycle restoration pass.
+
+The browser suite uses system Chrome by default. A local Chromium installation
+can be selected explicitly with `KITSUNEBI_E2E_CHROMIUM_EXECUTABLE=/absolute/path`.
+The Compose mock flow also runs `tests/integration/routine.py`, which checks
+routine operations without the plugin, permission and target denial, stale
+state, duplicate confirmation, provider failure, metadata-only listings, and
+unconfigured optional integrations. These checks require the disposable MySQL
+and mock topology; HTTP/UI fixtures alone do not verify MySQL persistence.

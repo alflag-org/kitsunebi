@@ -37,3 +37,17 @@ revisions, worlds, proxy pools and instances, execution units, runtime
 profiles, artifacts, config, endpoints, access policies, change sessions,
 operations, backups, and audit events.
 `openapi/openapi.json` is checked in and the API crate emits OpenAPI 3.1.
+
+## Process-manager observation scope
+
+Routine start, stop, and restart delegate to the public lifecycle API after
+checking authorization, the persisted target binding, and the existing exact
+version/schema/lifecycle-attestation gate. They do not require the optional
+process-manager plugin. Placement-sensitive operations retain their node
+observation checks, so an absent plugin cannot authorize a placement decision.
+A staged file write on an existing binding checks the current revision and
+requires node observation when that revision declares placement constraints.
+The plugin and its build checks remain part of this repository for those uses.
+Directory browsing uses metadata from the public content endpoint and makes no
+per-entry download requests. Explicit read and diff requests fetch only their
+selected path.

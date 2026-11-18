@@ -81,6 +81,7 @@ jobs:
         run: docker exec "${{ job.services.mysql.id }}" mysql -uroot -pci-root-password -e 'SET GLOBAL log_bin_trust_function_creators = 1'
       - run: cargo test --test mysql-migrations --package kitsunebi-storage
         env:
+          KITSUNEBI_REQUIRE_MYSQL: "1"
           DATABASE_URL: mysql://kitsunebi:ci-password@127.0.0.1:3306/kitsunebi
 
   integration:

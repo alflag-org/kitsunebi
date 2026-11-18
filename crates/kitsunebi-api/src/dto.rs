@@ -1527,7 +1527,8 @@ pub struct OperationDto {
 pub struct FileEntryDto {
     pub path: String,
     pub size: u64,
-    pub digest: String,
+    pub digest: Option<String>,
+    pub is_directory: bool,
     pub classification: String,
 }
 
@@ -1580,4 +1581,29 @@ pub fn safe_content_disposition(filename: &str) -> Result<String, ApiError> {
         })
         .collect::<String>();
     Ok(format!("attachment; filename=\"{clean}\""))
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LifecycleRequest {
+    pub action: ExecutionLifecycleAction,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LifecyclePreview {
+    pub session_id: String,
+    pub plan_id: String,
+    pub plan_hash: String,
+    pub expires_at: u64,
+    pub action: ExecutionLifecycleAction,
+    pub target_name: String,
+    pub running: bool,
+    pub impact: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LifecycleConfirmation {
+    pub plan_id: String,
+    pub plan_hash: String,
 }

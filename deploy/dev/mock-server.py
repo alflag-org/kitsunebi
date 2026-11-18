@@ -293,6 +293,8 @@ class FixtureHandler(BaseHTTPRequestHandler):
                             "restore_failure",
                             "oversize",
                             "monitoring_unobserved",
+                            "plugin_absent",
+                            "lifecycle_failure",
                         )
                     }
                 )
@@ -409,6 +411,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
             value = {}
         plugin = self._match(path, r"/api/plugins/([^/]+)/observe$")
         if plugin:
+            if state.get("fault", {}).get("plugin_absent"):
+                self._respond(404, json_bytes({"error": "plugin absent"}))
+                return
             node_id = value.get("node_id") if isinstance(value, dict) else None
             if not isinstance(node_id, int) or node_id <= 0:
                 self._respond(400, json_bytes({"error": "node_id is required"}))
@@ -433,6 +438,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
             return
         action = self._match(path, r"/api/servers/([^/]+)/(start|stop|restart)$")
         if action:
+            if state.get("fault", {}).get("lifecycle_failure"):
+                self._respond(503, json_bytes({"error": "lifecycle failed"}))
+                return
             server, command = action
             state.setdefault("servers", {}).setdefault(server, {"processActive": False})
             state["servers"][server]["processActive"] = command != "stop"

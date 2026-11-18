@@ -167,6 +167,25 @@ pub trait FilePort: Send + Sync {
 /// Application facade used by all resource and mutation routes.
 #[async_trait]
 pub trait ManagementApi: Send + Sync + 'static {
+    async fn prepare_lifecycle(
+        &self,
+        _actor: &VerifiedActor,
+        _unit: &str,
+        _input: crate::dto::LifecycleRequest,
+        _key: &str,
+    ) -> Result<crate::dto::LifecyclePreview, ApiError> {
+        Err(ApiError::NotFound)
+    }
+    async fn execute_lifecycle(
+        &self,
+        _actor: &VerifiedActor,
+        _session: &str,
+        _input: crate::dto::LifecycleConfirmation,
+        _key: &str,
+        _request_id: &str,
+    ) -> Result<OperationDto, ApiError> {
+        Err(ApiError::NotFound)
+    }
     async fn list(
         &self,
         resource: &str,

@@ -481,7 +481,8 @@ impl FilePort for InMemoryFiles {
             .map(|p| FileEntryDto {
                 path: p.clone(),
                 size: files[p].len() as u64,
-                digest: crate::plan_hash(&files[p]),
+                digest: None,
+                is_directory: false,
                 classification: "mutable_config".into(),
             })
             .collect())

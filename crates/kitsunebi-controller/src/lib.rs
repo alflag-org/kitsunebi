@@ -26,8 +26,8 @@ use kitsunebi_application::{
     ArtifactProvider as AppArtifactProvider, ArtifactStore as AppArtifactStore, AuditSink,
     Authorizer, BackupComponent, BackupProvider, BackupRestoreInvocation, ChangeRequest,
     ConnectionEvidence, ConnectionObserver, DnsResolver, DomainRepository, DurableStepPort,
-    ExecutionBackend, ExecutionStatus, FileChange, FileEntry, FileRestoreSnapshot, HealthVerifier,
-    OperationRequest, OperationStep, OperationStore, ProxyEdge, ProxyEdgeBinding,
+    ExecutionBackend, ExecutionStatus, FileChange, FileListingEntry, FileRestoreSnapshot,
+    HealthVerifier, OperationRequest, OperationStep, OperationStore, ProxyEdge, ProxyEdgeBinding,
     ProxyEdgeObservation, ProxyEdgeResolver, RollbackStepPort, SftpScanRequest, StepApplyResult,
     StepEvidence, StepExecutionEvidence, StepObservation, WorldStorage,
 };
@@ -73,6 +73,10 @@ use uuid::Uuid;
 
 #[cfg(test)]
 use kitsunebi_domain::GameAPBindingTarget;
+
+#[cfg(test)]
+mod regression;
+mod routine;
 
 const DEFAULT_BODY_LIMIT: usize = 1_048_576;
 const DEFAULT_UPLOAD_LIMIT: usize = 50 * 1024 * 1024;
@@ -1652,7 +1656,6 @@ impl ExecutionBackend for GameApExecutionBackend {
     }
     async fn start(&self, binding: &GameAPBinding) -> Result<(), ApplicationError> {
         self.require_capability(kitsunebi_gameap::Capability::Lifecycle)?;
-        self.require_node_observation(binding).await?;
         self.client
             .lifecycle(Self::binding_id(binding), Lifecycle::Start)
             .await
@@ -1661,7 +1664,6 @@ impl ExecutionBackend for GameApExecutionBackend {
     }
     async fn stop(&self, binding: &GameAPBinding) -> Result<(), ApplicationError> {
         self.require_capability(kitsunebi_gameap::Capability::Lifecycle)?;
-        self.require_node_observation(binding).await?;
         self.client
             .lifecycle(Self::binding_id(binding), Lifecycle::Stop)
             .await
@@ -1670,7 +1672,6 @@ impl ExecutionBackend for GameApExecutionBackend {
     }
     async fn restart(&self, binding: &GameAPBinding) -> Result<(), ApplicationError> {
         self.require_capability(kitsunebi_gameap::Capability::Lifecycle)?;
-        self.require_node_observation(binding).await?;
         self.client
             .lifecycle(Self::binding_id(binding), Lifecycle::Restart)
             .await
@@ -1693,7 +1694,7 @@ impl ExecutionBackend for GameApExecutionBackend {
         &self,
         binding: &GameAPBinding,
         path: &str,
-    ) -> Result<Vec<FileEntry>, ApplicationError> {
+    ) -> Result<Vec<FileListingEntry>, ApplicationError> {
         let content = self
             .client
             .list_files(
@@ -1707,47 +1708,36 @@ impl ExecutionBackend for GameApExecutionBackend {
         } else {
             format!("{path}/")
         };
-        let mut entries = Vec::with_capacity(content.items.len());
-        for entry in content.items {
-            let entry_path = format!("{prefix}{}", entry.name);
-            if entry.kind == "directory" {
-                entries.push(FileEntry {
-                    path: entry_path,
-                    classification: FileClassification::Unknown,
-                    digest: String::new(),
-                    size: 0,
-                });
-                continue;
-            }
-            let bytes = self
-                .client
-                .download_file(Self::binding_id(binding), &entry_path)
-                .await
-                .map_err(Self::map_error)?;
-            entries.push(FileEntry {
-                path: entry_path,
-                classification: FileClassification::Unknown,
-                digest: kitsunebi_gameap::sha256_hex(&bytes),
-                size: bytes.len() as u64,
-            });
-        }
-        // A file request may return its content directly rather than an item
-        // list. Preserve that shape so callers still receive a digestable
-        // snapshot for a nested path.
-        if entries.is_empty()
-            && content.kind == "file"
-            && let Some(value) = content.content
-        {
-            let bytes = value.into_bytes();
-            entries.push(FileEntry {
+        if content.kind == "file" {
+            // A direct file lookup may include text in the provider response.
+            // Do not issue a second request or represent it as a directory.
+            return Ok(vec![FileListingEntry {
                 path: path.into(),
                 classification: FileClassification::Unknown,
-                digest: kitsunebi_gameap::sha256_hex(&bytes),
-                size: bytes.len() as u64,
-            });
+                size: content
+                    .content
+                    .as_ref()
+                    .map_or(0, |value| value.len() as u64),
+                is_directory: false,
+            }]);
         }
-        Ok(entries)
+        content
+            .items
+            .into_iter()
+            .map(|entry| {
+                let entry_path = format!("{prefix}{}", entry.name);
+                kitsunebi_gameap::validate_relative_path(&entry_path)
+                    .map_err(|_| ApplicationError::Conflict("invalid provider file path"))?;
+                Ok(FileListingEntry {
+                    path: entry_path,
+                    classification: FileClassification::Unknown,
+                    size: entry.size,
+                    is_directory: entry.kind == "directory",
+                })
+            })
+            .collect()
     }
+
     async fn read_file(
         &self,
         binding: &GameAPBinding,
@@ -1773,7 +1763,6 @@ impl ExecutionBackend for GameApExecutionBackend {
         change: &FileChange,
         bytes: &[u8],
     ) -> Result<(), ApplicationError> {
-        self.require_node_observation(binding).await?;
         let content = std::str::from_utf8(bytes)
             .map_err(|_| ApplicationError::VerificationFailed("text file is not UTF-8".into()))?;
         self.client
@@ -1790,7 +1779,6 @@ impl ExecutionBackend for GameApExecutionBackend {
         change: &FileChange,
         bytes: &[u8],
     ) -> Result<(), ApplicationError> {
-        self.require_node_observation(binding).await?;
         self.client
             .upload_file(Self::binding_id(binding), &change.path, bytes)
             .await
@@ -2358,9 +2346,19 @@ impl ControllerStepPort {
         }
         let value: String = sqlx::Row::try_get(&rows[0], "id")
             .map_err(|_| ApplicationError::NotFound("gameap binding"))?;
-        Uuid::parse_str(&value)
+        let id = Uuid::parse_str(&value)
             .map(BindingId::from_uuid)
-            .map_err(|_| ApplicationError::NotFound("gameap binding"))
+            .map_err(|_| ApplicationError::NotFound("gameap binding"))?;
+        let current = self
+            .storage
+            .get_gameap_binding(id.as_uuid())
+            .await
+            .map_err(|_| ApplicationError::NotFound("gameap binding"))?
+            .ok_or(ApplicationError::NotFound("gameap binding"))?;
+        if current.fingerprint() != binding.fingerprint() {
+            return Err(ApplicationError::StalePlan);
+        }
+        Ok(id)
     }
     async fn validate_declared_file(
         &self,
@@ -2599,7 +2597,13 @@ impl ControllerStepPort {
         Ok(Self::hash(&self.execution.read_file(binding, path).await?))
     }
     async fn ensure_placement(&self, binding: &GameAPBinding) -> Result<(), ApplicationError> {
-        self.execution.observe_node_capability(binding).await?;
+        self.check_placement(binding, true).await
+    }
+    async fn check_placement(
+        &self,
+        binding: &GameAPBinding,
+        requires_observation: bool,
+    ) -> Result<(), ApplicationError> {
         let matches = self
             .storage
             .list_gameap_bindings()
@@ -2653,6 +2657,13 @@ impl ControllerStepPort {
         let requirements = revision
             .typed_placement_requirements()
             .map_err(|_| ApplicationError::Conflict("invalid placement requirements"))?;
+        if !requires_observation
+            && requirements.process_managers.is_empty()
+            && requirements.required_capabilities.is_empty()
+        {
+            return Ok(());
+        }
+        self.execution.observe_node_capability(binding).await?;
         let observation = self
             .storage
             .latest_node_capability(&binding.node_id)
@@ -2905,10 +2916,20 @@ impl ControllerStepPort {
                 | OperationStep::BackupRestore { .. }
                 | OperationStep::ServicePurge { .. }
         );
+        // Lifecycle and file-write preconditions are provider observations,
+        // even before inverse evidence exists. Other step contracts retain
+        // their descriptor precondition until preparation captures the inverse.
         if needs_inverse
             && evidence
                 .and_then(|value| value.execution.as_ref())
                 .is_none()
+            && !matches!(
+                step,
+                OperationStep::ExecutionStart { .. }
+                    | OperationStep::ExecutionStop { .. }
+                    | OperationStep::ExecutionRestart { .. }
+                    | OperationStep::FileWrite { .. }
+            )
         {
             return Ok(StepObservation {
                 state_hash: Self::hash(format!("{step:?}").as_bytes()),
@@ -2916,6 +2937,22 @@ impl ControllerStepPort {
                 unambiguous: true,
             });
         }
+        let mut observation = self.observe_state(step, evidence).await?;
+        if needs_inverse
+            && evidence
+                .and_then(|value| value.execution.as_ref())
+                .is_none()
+        {
+            observation.completed = false;
+        }
+        Ok(observation)
+    }
+
+    async fn observe_state(
+        &self,
+        step: &OperationStep,
+        evidence: Option<&StepEvidence>,
+    ) -> Result<StepObservation, ApplicationError> {
         match step {
             OperationStep::ExecutionProvision { binding } => {
                 let status = self.execution.status(binding).await?;
@@ -2989,10 +3026,18 @@ impl ControllerStepPort {
             }
             OperationStep::ExecutionRestart { binding } => {
                 let status = self.execution.status(binding).await?;
+                // A running process alone cannot prove that an interrupted
+                // restart completed; require the persisted provider result.
                 Ok(StepObservation {
                     state_hash: status.state_hash,
-                    completed: false,
-                    unambiguous: true,
+                    completed: status.running
+                        && evidence.is_some_and(|value| {
+                            matches!(
+                                value.result.as_str(),
+                                "applied" | "already-complete" | "verified"
+                            )
+                        }),
+                    unambiguous: !evidence.is_some_and(|value| value.result == "prepared"),
                 })
             }
             OperationStep::FileWrite {
@@ -3142,6 +3187,14 @@ impl ControllerStepPort {
                     .tcp_shield
                     .as_ref()
                     .ok_or(ApplicationError::Port("TCPShield is unavailable".into()))?;
+                if matches!(
+                    edge.observer.as_ref(),
+                    ConfiguredConnectionObserver::Unavailable
+                ) {
+                    return Err(ApplicationError::Port(
+                        "proxy rollout requires configured connection monitoring".into(),
+                    ));
+                }
                 let (new, old, _, target_execution, old_execution) = self
                     .proxy_bindings(
                         *expected_instance,
@@ -3557,12 +3610,19 @@ impl ControllerStepPort {
             | OperationStep::ExecutionStart { binding }
             | OperationStep::ExecutionStop { binding }
             | OperationStep::ExecutionRestart { binding } => {
-                self.ensure_placement(binding).await?;
+                if matches!(step, OperationStep::ExecutionProvision { .. }) {
+                    self.ensure_placement(binding).await?;
+                }
                 let binding_id = self.binding_id_for(binding).await?;
                 let (prior_state_hash, prior_running, prior_exists) =
                     match self.execution.status(binding).await {
                         Ok(status) => (status.state_hash, status.running, true),
-                        Err(_) => (Self::hash(b"absent"), false, false),
+                        Err(ApplicationError::NotFound(_))
+                            if matches!(step, OperationStep::ExecutionProvision { .. }) =>
+                        {
+                            (Self::hash(b"absent"), false, false)
+                        }
+                        Err(error) => return Err(error),
                     };
                 Ok(Some(StepExecutionEvidence::Execution {
                     binding_id,
@@ -3611,7 +3671,7 @@ impl ControllerStepPort {
             OperationStep::FileWrite {
                 binding, change, ..
             } => {
-                self.ensure_placement(binding).await?;
+                self.check_placement(binding, false).await?;
                 self.validate_declared_file(binding, &change.path, &change.classification)
                     .await?;
                 Ok(Some(StepExecutionEvidence::File {
@@ -3747,6 +3807,14 @@ impl ControllerStepPort {
                     .tcp_shield
                     .as_ref()
                     .ok_or(ApplicationError::Port("TCPShield is unavailable".into()))?;
+                if matches!(
+                    edge.observer.as_ref(),
+                    ConfiguredConnectionObserver::Unavailable
+                ) {
+                    return Err(ApplicationError::Port(
+                        "proxy rollout requires configured connection monitoring".into(),
+                    ));
+                }
                 let (new, old, _, target_execution, old_execution) = self
                     .proxy_bindings(
                         *expected_instance,
@@ -5435,7 +5503,7 @@ impl ControllerStepPort {
                 })
             }
             OperationStep::ExecutionStart { binding } => {
-                self.ensure_placement(binding).await?;
+                self.binding_id_for(binding).await?;
                 self.execution.start(binding).await?;
                 self.observe(step, None).await
             }
@@ -5465,12 +5533,12 @@ impl ControllerStepPort {
                 self.observe(step, None).await
             }
             OperationStep::ExecutionStop { binding } => {
-                self.ensure_placement(binding).await?;
+                self.binding_id_for(binding).await?;
                 self.execution.stop(binding).await?;
                 self.observe(step, None).await
             }
             OperationStep::ExecutionRestart { binding } => {
-                self.ensure_placement(binding).await?;
+                self.binding_id_for(binding).await?;
                 self.execution.restart(binding).await?;
                 let status = self.execution.status(binding).await?;
                 Ok(StepObservation {
@@ -5486,7 +5554,7 @@ impl ControllerStepPort {
                 expected_before_digest,
                 ..
             } => {
-                self.ensure_placement(binding).await?;
+                self.check_placement(binding, false).await?;
                 self.apply_file_write(binding, change, content, expected_before_digest)
                     .await
             }
@@ -5633,6 +5701,14 @@ impl ControllerStepPort {
                     .tcp_shield
                     .as_ref()
                     .ok_or(ApplicationError::Port("TCPShield is unavailable".into()))?;
+                if matches!(
+                    edge.observer.as_ref(),
+                    ConfiguredConnectionObserver::Unavailable
+                ) {
+                    return Err(ApplicationError::Port(
+                        "proxy rollout requires configured connection monitoring".into(),
+                    ));
+                }
                 let Some(StepExecutionEvidence::Proxy {
                     expected_instance_id: evidence_expected_instance,
                     target_instance_id: evidence_target_instance,
@@ -6461,12 +6537,12 @@ impl RollbackStepPort for ControllerStepPort {
                 "cluster revision creation has no reversible delete operation".into(),
             )),
             OperationStep::ExecutionStart { binding } => {
-                self.ensure_placement(binding).await?;
+                self.binding_id_for(binding).await?;
                 self.execution.stop(binding).await?;
                 self.observe(step, None).await
             }
             OperationStep::ExecutionStop { binding } => {
-                self.ensure_placement(binding).await?;
+                self.binding_id_for(binding).await?;
                 let prior_running = match evidence.and_then(|item| item.execution.as_ref()) {
                     Some(StepExecutionEvidence::Execution { prior_running, .. }) => *prior_running,
                     _ => {
@@ -6568,7 +6644,7 @@ impl RollbackStepPort for ControllerStepPort {
                         "file inverse unavailable".into(),
                     ));
                 };
-                self.ensure_placement(binding).await?;
+                self.check_placement(binding, false).await?;
                 self.restore_inverse(
                     binding,
                     inverse,
@@ -6762,7 +6838,7 @@ impl RollbackStepPort for ControllerStepPort {
                 })
             }
             OperationStep::ExecutionRestart { binding } => {
-                self.ensure_placement(binding).await?;
+                self.binding_id_for(binding).await?;
                 self.execution.restart(binding).await?;
                 self.observe(step, None).await
             }
@@ -7979,7 +8055,8 @@ impl FilePort for GameApFiles {
                 Ok(FileEntryDto {
                     path: entry.path,
                     size: entry.size,
-                    digest: entry.digest,
+                    digest: None,
+                    is_directory: entry.is_directory,
                     classification: classification.as_str().into(),
                 })
             })
@@ -8789,6 +8866,26 @@ impl MysqlManagement {
 
 #[async_trait]
 impl ManagementApi for MysqlManagement {
+    async fn prepare_lifecycle(
+        &self,
+        actor: &VerifiedActor,
+        unit: &str,
+        input: kitsunebi_api::dto::LifecycleRequest,
+        key: &str,
+    ) -> Result<kitsunebi_api::dto::LifecyclePreview, ApiError> {
+        self.prepare_routine(actor, unit, input, key).await
+    }
+    async fn execute_lifecycle(
+        &self,
+        actor: &VerifiedActor,
+        session: &str,
+        input: kitsunebi_api::dto::LifecycleConfirmation,
+        key: &str,
+        request_id: &str,
+    ) -> Result<OperationDto, ApiError> {
+        self.execute_routine(actor, session, input, key, request_id)
+            .await
+    }
     async fn list(
         &self,
         resource: &str,
@@ -8927,6 +9024,28 @@ impl ManagementApi for MysqlManagement {
                             && let Some(binding_id) = binding_id
                         {
                             object.insert("binding_id".into(), Value::String(binding_id));
+                        }
+                        let resolved = self
+                            .files
+                            .resolve_execution(
+                                actor,
+                                &binding.execution_unit_id,
+                                ApiPermission::ServiceRead,
+                            )
+                            .await?;
+                        if let Some(object) = fields.as_object_mut() {
+                            object.insert(
+                                "name".into(),
+                                Value::String(self.execution_label(&resolved).await?),
+                            );
+                            object.insert(
+                                "service_id".into(),
+                                Value::String(resolved.service.as_uuid().to_string()),
+                            );
+                            object.insert(
+                                "cluster_id".into(),
+                                Value::String(resolved.cluster.as_uuid().to_string()),
+                            );
                         }
                         result.push(ResourceDto {
                             id: binding.execution_unit_id.clone(),
@@ -9878,12 +9997,6 @@ impl ManagementApi for MysqlManagement {
                 {
                     existing
                 } else {
-                    if matches!(session.state, ChangeSessionState::Ready) {
-                        self.coordinator()
-                            .mark_applying(session_id, actor, service_id)
-                            .await
-                            .map_err(application_error)?;
-                    }
                     self.app
                         .execute_plan(&operation_request, plan_id, now(), &context.request_id)
                         .await
@@ -10131,7 +10244,10 @@ impl ManagementApi for MysqlManagement {
     }
 
     async fn provider_health(&self, _actor: &VerifiedActor) -> Result<Value, ApiError> {
-        Ok(MysqlManagement::provider_health(self).await)
+        let mut health = MysqlManagement::provider_health(self).await;
+        health["backup"] = json!({"status": if matches!(self.app.steps.backup, ConfiguredBackupProvider::Disabled) { "not_configured" } else { "configured" }, "evidence": "not_checked"});
+        health["monitoring"] = json!({"status": if self.tcp_shield.as_ref().is_some_and(|provider| matches!(provider.observer.as_ref(), ConfiguredConnectionObserver::Http(_))) { "configured" } else { "not_configured" }, "evidence": "not_checked"});
+        Ok(health)
     }
 
     async fn ready(&self) -> Result<Value, ApiError> {

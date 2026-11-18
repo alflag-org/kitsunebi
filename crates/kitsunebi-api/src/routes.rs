@@ -113,6 +113,14 @@ pub fn router(
     }
     protected = protected
         .route(
+            "/api/v1/execution-units/{id}/lifecycle/prepare",
+            axum::routing::post(prepare_lifecycle),
+        )
+        .route(
+            "/api/v1/change-sessions/{id}/execute-lifecycle",
+            axum::routing::post(execute_lifecycle),
+        )
+        .route(
             "/api/v1/change-sessions",
             axum::routing::post(begin_change_session),
         )
@@ -1356,4 +1364,40 @@ fn unix_now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+async fn prepare_lifecycle(
+    State(state): State<ApiState>,
+    Extension(actor): Extension<VerifiedActor>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    body: Result<Json<crate::dto::LifecycleRequest>, JsonRejection>,
+) -> Result<Json<crate::dto::LifecyclePreview>, ApiError> {
+    require_json(&headers, state.security.body_limit)?;
+    check_state_change(&state.security, &headers, &actor).await?;
+    let key = required_header(&headers, "idempotency-key", 128)?;
+    state
+        .management
+        .prepare_lifecycle(&actor, &id, parse_json_body(body)?, key)
+        .await
+        .map(Json)
+}
+
+async fn execute_lifecycle(
+    State(state): State<ApiState>,
+    Extension(actor): Extension<VerifiedActor>,
+    Extension(request_id): Extension<RequestId>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    body: Result<Json<crate::dto::LifecycleConfirmation>, JsonRejection>,
+) -> Result<Json<OperationDto>, ApiError> {
+    validate_uuid_path(&id, "change_session_id")?;
+    require_json(&headers, state.security.body_limit)?;
+    check_state_change(&state.security, &headers, &actor).await?;
+    let key = required_header(&headers, "idempotency-key", 128)?;
+    state
+        .management
+        .execute_lifecycle(&actor, &id, parse_json_body(body)?, key, &request_id.0)
+        .await
+        .map(Json)
 }

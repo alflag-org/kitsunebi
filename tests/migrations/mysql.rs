@@ -19,6 +19,20 @@ use kitsunebi_storage::{ActorKind, MySqlStorage};
 use serde_json::json;
 use uuid::Uuid;
 
+fn test_database_url() -> Option<String> {
+    match std::env::var("DATABASE_URL") {
+        Ok(url) => Some(url),
+        Err(_) => {
+            assert!(
+                std::env::var("KITSUNEBI_REQUIRE_MYSQL").as_deref() != Ok("1"),
+                "DATABASE_URL must point to a disposable MySQL schema"
+            );
+            eprintln!("not run: DATABASE_URL is unset");
+            None
+        }
+    }
+}
+
 #[test]
 fn initial_schema_keeps_second_wave_contracts_closed_and_non_nullable() {
     let schema = include_str!("../../migrations/0001_initial.sql");
@@ -48,7 +62,7 @@ fn initial_schema_keeps_second_wave_contracts_closed_and_non_nullable() {
 
 #[tokio::test]
 async fn fresh_schema_is_repeatable() {
-    let Ok(url) = std::env::var("DATABASE_URL") else {
+    let Some(url) = test_database_url() else {
         return;
     };
     let storage = MySqlStorage::connect(&url).await.expect("connect MySQL");
@@ -59,7 +73,7 @@ async fn fresh_schema_is_repeatable() {
 
 #[tokio::test]
 async fn artifacts_round_trip_through_domain_and_db_version_columns() {
-    let Ok(url) = std::env::var("DATABASE_URL") else {
+    let Some(url) = test_database_url() else {
         return;
     };
     let storage = MySqlStorage::connect(&url).await.expect("connect MySQL");
@@ -105,7 +119,7 @@ async fn artifacts_round_trip_through_domain_and_db_version_columns() {
 
 #[tokio::test]
 async fn persistence_invariants_are_enforced() {
-    let Ok(url) = std::env::var("DATABASE_URL") else {
+    let Some(url) = test_database_url() else {
         return;
     };
     let storage = MySqlStorage::connect(&url).await.expect("connect MySQL");
@@ -675,103 +689,21 @@ async fn persistence_invariants_are_enforced() {
             .is_err()
     );
 
-    // The fixture is disposable by contract (DATABASE_URL must point to a test
-    // schema). Audit rows intentionally remain because the table is append-only;
-    // remove the other rows created by this test without dropping a database or
-    // touching unrelated data.
-    for binding_id in binding_ids {
-        sqlx::query("DELETE FROM gameap_bindings WHERE id = ?")
-            .bind(binding_id.to_string())
+    // Keep this UUID-isolated fixture graph for the lifetime of the disposable
+    // test schema: append-only audit evidence owns references to these rows.
+    // Deleting an audited operation must remain forbidden.
+    assert!(
+        sqlx::query("DELETE FROM operations WHERE id = ?")
+            .bind(operation.id.as_uuid().to_string())
             .execute(storage.pool())
             .await
-            .expect("binding cleanup");
-    }
-    sqlx::query("DELETE FROM proxy_instances WHERE id = ?")
-        .bind(proxy.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("proxy cleanup");
-    sqlx::query("DELETE FROM proxy_pools WHERE id = ?")
-        .bind(proxy_pool.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("proxy pool cleanup");
-    sqlx::query("DELETE FROM operation_steps WHERE operation_id = ?")
-        .bind(operation.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("operation step cleanup");
-    sqlx::query("DELETE FROM operations WHERE id = ?")
-        .bind(operation.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("operation cleanup");
-    sqlx::query("DELETE FROM plans WHERE id = ?")
-        .bind(plan.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("plan cleanup");
-    sqlx::query("DELETE FROM change_sessions WHERE id = ?")
-        .bind(session.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("session cleanup");
-    sqlx::query("DELETE FROM world_writers WHERE world_id = ?")
-        .bind(world.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("writer cleanup");
-    sqlx::query("DELETE FROM worlds WHERE id = ?")
-        .bind(world.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("world cleanup");
-    sqlx::query("DELETE FROM clusters WHERE id = ?")
-        .bind(cluster.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("cluster cleanup");
-    sqlx::query("DELETE FROM clusters WHERE id = ?")
-        .bind(other_cluster.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("other cluster cleanup");
-    sqlx::query("DELETE FROM access_policy_bindings WHERE policy_id = ?")
-        .bind(policy.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("policy binding cleanup");
-    sqlx::query("DELETE FROM access_policies WHERE id = ?")
-        .bind(policy.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("policy cleanup");
-    sqlx::query("DELETE FROM actor_identities WHERE actor_id IN (?, ?)")
-        .bind(actor.as_uuid().to_string())
-        .bind(service_actor.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("actor identity cleanup");
-    sqlx::query("DELETE FROM services WHERE id = ?")
-        .bind(service.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("service cleanup");
-    sqlx::query("DELETE FROM services WHERE id = ?")
-        .bind(other_service.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("other service cleanup");
-    sqlx::query("DELETE FROM networks WHERE id = ?")
-        .bind(network.id.as_uuid().to_string())
-        .execute(storage.pool())
-        .await
-        .expect("network cleanup");
+            .is_err()
+    );
 }
 
 #[tokio::test]
 async fn current_binding_resolves_manifest_and_endpoint_revision_cas() {
-    let Ok(url) = std::env::var("DATABASE_URL") else {
+    let Some(url) = test_database_url() else {
         return;
     };
     let storage = MySqlStorage::connect(&url).await.expect("connect MySQL");

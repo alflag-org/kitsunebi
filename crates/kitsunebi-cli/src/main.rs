@@ -896,6 +896,12 @@ fn print_row(value: &Value) {
     let name = value
         .get("name")
         .and_then(Value::as_str)
+        .or_else(|| {
+            value
+                .get("fields")
+                .and_then(|fields| fields.get("name"))
+                .and_then(Value::as_str)
+        })
         .or_else(|| value.get("status").and_then(Value::as_str))
         .unwrap_or("-");
     let extra = value
@@ -916,7 +922,10 @@ fn print_file_entries(entries: &[FileEntryDto], json: bool) -> Result<(), CliErr
     for entry in entries {
         println!(
             "{}\t{}\t{}\t{}",
-            entry.path, entry.size, entry.digest, entry.classification
+            entry.path,
+            entry.size,
+            entry.digest.as_deref().unwrap_or("not fetched"),
+            entry.classification
         );
     }
     Ok(())
@@ -1035,7 +1044,9 @@ fn one_id(args: &ParsedArgs) -> Result<&str, CliError> {
 }
 
 fn run_files(client: &ApiClient, action: &str, args: &ParsedArgs) -> Result<(), CliError> {
-    let id = one_id(args)?;
+    let name = one_id(args)?;
+    let units = client.list("execution-units")?;
+    let id = &resolve_named_unit(&units, name)?.id;
     match action {
         "list" => {
             let path = args.value("path");
@@ -1073,6 +1084,138 @@ fn run_files(client: &ApiClient, action: &str, args: &ParsedArgs) -> Result<(), 
         )),
     }
 }
+fn lifecycle_headers(client: &ApiClient, key: &str) -> Result<HeaderMap, CliError> {
+    let mut headers = HeaderMap::new();
+    insert_header(&mut headers, "Idempotency-Key", key)?;
+    if client.auth.is_jwt() {
+        insert_header(
+            &mut headers,
+            "Origin",
+            &env::var("KITSUNEBI_ORIGIN")
+                .map_err(|_| CliError::Config("KITSUNEBI_ORIGIN is required"))?,
+        )?;
+        insert_header(
+            &mut headers,
+            "X-CSRF-Token",
+            &env::var("KITSUNEBI_CSRF_TOKEN")
+                .map_err(|_| CliError::Config("KITSUNEBI_CSRF_TOKEN is required"))?,
+        )?;
+    }
+    Ok(headers)
+}
+
+fn resolve_named_unit<'a>(
+    units: &'a [ResourceDto],
+    name: &str,
+) -> Result<&'a ResourceDto, CliError> {
+    let mut matches = units
+        .iter()
+        .filter(|unit| unit.fields.get("name").and_then(Value::as_str) == Some(name));
+    let unit = matches
+        .next()
+        .ok_or(CliError::Usage("target name not found; use server list"))?;
+    if matches.next().is_some() {
+        return Err(CliError::Usage(
+            "target name is ambiguous; select a uniquely named execution unit",
+        ));
+    }
+    Ok(unit)
+}
+
+fn run_lifecycle(client: &ApiClient, action: &str, args: &ParsedArgs) -> Result<(), CliError> {
+    use kitsunebi_api::dto::{
+        ExecutionLifecycleAction, LifecycleConfirmation, LifecyclePreview, LifecycleRequest,
+    };
+    let name = one_id(args)?;
+    let units = client.list("execution-units")?;
+    let unit = resolve_named_unit(&units, name)?;
+    if !args.flag("yes") && !io::stdin().is_terminal() {
+        return Err(CliError::Usage(
+            "interactive confirmation required; use --yes for automation",
+        ));
+    }
+    let action = match action {
+        "start" => ExecutionLifecycleAction::Start,
+        "stop" => ExecutionLifecycleAction::Stop,
+        _ => ExecutionLifecycleAction::Restart,
+    };
+    let key = format!(
+        "cli-lifecycle-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let headers = lifecycle_headers(client, &key)?;
+    let preview: LifecyclePreview = decode_json(
+        client.send(
+            Method::POST,
+            client.endpoint(&[
+                "api",
+                "v1",
+                "execution-units",
+                &unit.id,
+                "lifecycle",
+                "prepare",
+            ])?,
+            Some(&LifecycleRequest { action }),
+            Some(&headers),
+            false,
+        )?,
+        MAX_JSON_BYTES,
+    )?;
+    eprintln!(
+        "{}: {} Currently {}.",
+        preview.target_name,
+        preview.impact,
+        if preview.running {
+            "running"
+        } else {
+            "stopped"
+        }
+    );
+    if !args.flag("yes") {
+        eprint!("Execute? [y/N] ");
+        io::stderr()
+            .flush()
+            .map_err(|_| CliError::Transport("confirmation output failed"))?;
+        let mut answer = String::new();
+        io::stdin()
+            .read_line(&mut answer)
+            .map_err(|_| CliError::Transport("confirmation input failed"))?;
+        if !matches!(answer.trim(), "y" | "Y" | "yes") {
+            return Ok(());
+        }
+    }
+    let operation: OperationDto = decode_json(
+        client.send(
+            Method::POST,
+            client.endpoint(&[
+                "api",
+                "v1",
+                "change-sessions",
+                &preview.session_id,
+                "execute-lifecycle",
+            ])?,
+            Some(&LifecycleConfirmation {
+                plan_id: preview.plan_id,
+                plan_hash: preview.plan_hash,
+            }),
+            Some(&headers),
+            false,
+        )?,
+        MAX_JSON_BYTES,
+    )?;
+    print_operation(&operation, client.json)?;
+    if operation.status != "accepted" {
+        return Err(CliError::Transport(
+            "operation is not accepted; inspect operation history",
+        ));
+    }
+    Ok(())
+}
+
 fn run_service_or_server(
     client: &ApiClient,
     group: &str,
@@ -1081,6 +1224,9 @@ fn run_service_or_server(
 ) -> Result<(), CliError> {
     if matches!(action, "list" | "show") {
         return read_command(client, group, action, args);
+    }
+    if group != "service" && matches!(action, "start" | "stop" | "restart") {
+        return run_lifecycle(client, action, args);
     }
     let id = one_id(args)?;
     let _ = id;
@@ -1286,6 +1432,34 @@ fn main() {
 mod tests {
     use super::*;
     #[test]
+    fn named_target_selection_rejects_missing_or_ambiguous_names() {
+        let unit = ResourceDto {
+            id: "6".into(),
+            fields: serde_json::json!({"name": "Service / primary"}),
+        };
+        assert_eq!(
+            resolve_named_unit(std::slice::from_ref(&unit), "Service / primary")
+                .unwrap()
+                .id,
+            "6"
+        );
+        assert!(resolve_named_unit(std::slice::from_ref(&unit), "6").is_err());
+        assert!(
+            resolve_named_unit(
+                &[
+                    unit.clone(),
+                    ResourceDto {
+                        id: "7".into(),
+                        fields: unit.fields
+                    }
+                ],
+                "Service / primary"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn remote_http_is_rejected() {
         assert!(parse_base_url("http://example.test", true).is_err());
     }
@@ -1413,8 +1587,7 @@ mod tests {
                 request
                     .contains("get /api/v1/execution-units/server-1/files?path=plugins%2fconfig ")
             );
-            let body =
-                r#"[{"path":"plugins/config","size":4,"digest":"abcd","classification":"text"}]"#;
+            let body = r#"[{"path":"plugins/config","size":4,"digest":null,"classification":"text","is_directory":false}]"#;
             write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
         });
         let client = ApiClient {
@@ -1427,6 +1600,7 @@ mod tests {
             .file_list("server-1", Some("plugins/config"))
             .unwrap();
         assert_eq!(values[0].path, "plugins/config");
+        assert_eq!(values[0].digest, None);
         server.join().unwrap();
     }
     #[test]

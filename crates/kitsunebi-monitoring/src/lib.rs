@@ -333,14 +333,16 @@ mod tests {
 
     #[tokio::test]
     async fn deadline_returns_last_active_observation() {
-        let (url, requests) = server(vec![(200, body(5, true, A)); 4]);
-        let result = observer(&url, Duration::from_millis(5), Duration::from_millis(20))
+        let (url, requests) = server(vec![(200, body(5, true, A))]);
+        // The next poll would fall at the deadline, so the last positive
+        // observation must be returned without reporting a drained target.
+        let deadline = Duration::from_millis(20);
+        let result = observer(&url, deadline, deadline)
             .observe_checked("proxy")
             .await
             .expect("evidence");
         assert_eq!(result.active, 5);
-        assert!(requests.recv().is_ok());
-        assert!(requests.recv().is_ok());
+        assert!(requests.try_recv().is_ok());
     }
 
     #[tokio::test]

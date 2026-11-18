@@ -1084,6 +1084,7 @@ fn trim_page_rows(
     Ok((rows, next_cursor))
 }
 
+// Dynamic IN lists contain only placeholders. Each ID is bound separately.
 fn placeholders(count: usize) -> String {
     std::iter::repeat_n("?", count)
         .collect::<Vec<_>>()
@@ -1468,7 +1469,7 @@ impl MySqlStorage {
             "SELECT * FROM services WHERE id IN ({}) AND id > ? ORDER BY id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -1503,7 +1504,7 @@ impl MySqlStorage {
             "SELECT c.* FROM clusters c WHERE c.service_id IN ({}) AND c.id > ? ORDER BY c.id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -1538,7 +1539,7 @@ impl MySqlStorage {
             "SELECT r.* FROM cluster_revisions r JOIN clusters c ON c.id = r.cluster_id WHERE c.service_id IN ({}) AND r.id > ? ORDER BY r.id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -1573,7 +1574,7 @@ impl MySqlStorage {
             "SELECT w.* FROM worlds w JOIN clusters c ON c.id = w.cluster_id WHERE c.service_id IN ({}) AND w.id > ? ORDER BY w.id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -1616,7 +1617,7 @@ impl MySqlStorage {
             "SELECT DISTINCT pi.* FROM proxy_instances pi JOIN routes r ON r.pool_id = pi.pool_id JOIN clusters c ON c.id = r.cluster_id WHERE c.service_id IN ({}) AND pi.id > ? ORDER BY pi.id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -1654,7 +1655,7 @@ impl MySqlStorage {
             "SELECT r.id, r.cluster_id, r.priority, r.disabled, r.metadata FROM routes r WHERE r.cluster_id IN (SELECT c.id FROM clusters c WHERE c.service_id IN ({})) AND r.id > ? ORDER BY r.id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -1701,7 +1702,7 @@ impl MySqlStorage {
             "SELECT b.id, b.endpoint_id, b.revision_id, b.cluster_id, b.binding_key, b.metadata FROM endpoint_bindings b JOIN cluster_revisions r ON r.id = b.revision_id JOIN clusters c ON c.id = r.cluster_id WHERE c.service_id IN ({}) AND b.id > ? ORDER BY b.id LIMIT ?",
             placeholders(ids.len())
         );
-        let mut query = sqlx::query(&statement);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(statement));
         for id in ids {
             query = query.bind(id);
         }
@@ -4750,7 +4751,7 @@ impl MySqlStorage {
         let operation_update_sql = format!(
             "UPDATE operations SET state = ?, result = ?{lease_columns}, version = version + 1, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ? AND lease_owner = ? AND lease_until > CURRENT_TIMESTAMP(6) AND {state_predicate} AND version = ?"
         );
-        let mut operation_update = sqlx::query(&operation_update_sql)
+        let mut operation_update = sqlx::query(sqlx::AssertSqlSafe(operation_update_sql))
             .bind(operation_state(&target))
             .bind(result_payload)
             .bind(text(lease.operation.as_uuid()))
@@ -4785,7 +4786,7 @@ impl MySqlStorage {
         let session_update_sql = format!(
             "UPDATE change_sessions SET state = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ? AND {session_state_predicate} AND version = ?"
         );
-        let mut session_update = sqlx::query(&session_update_sql)
+        let mut session_update = sqlx::query(sqlx::AssertSqlSafe(session_update_sql))
             .bind(next_session)
             .bind(&operation_session);
         for expected in expected_session_states {

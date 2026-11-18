@@ -5,7 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY web ./
 RUN npm run check && npm run test && npm run build
 
-FROM rust:1.88-bookworm AS build
+FROM rust:1.99-bookworm AS build
 WORKDIR /src
 COPY . .
 RUN cargo build --release --bin kitsunebi-controller --features local-auth -p kitsunebi-controller

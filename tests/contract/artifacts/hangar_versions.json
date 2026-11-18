@@ -1,0 +1,21 @@
+{
+  "pagination": { "count": 1, "limit": 10, "offset": 0 },
+  "result": [
+    {
+      "createdAt": "2026-07-11T05:41:49.892141Z",
+      "id": 27601,
+      "projectId": 1289,
+      "name": "2.12.3",
+      "downloads": {
+        "PAPER": {
+          "fileInfo": {
+            "name": "PlaceholderAPI-2.12.3.jar",
+            "sizeBytes": 1160690,
+            "sha256Hash": "fde03259f5af6938f3c33eeb4d814000a1adabf1d2304ce14970be81f609a437"
+          },
+          "downloadUrl": "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/PAPER/PlaceholderAPI-2.12.3.jar"
+        }
+      }
+    }
+  ]
+}

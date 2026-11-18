@@ -1,14 +1,43 @@
-[package]
-name = "kitsunebi"
-version = "0.2.0"
+[workspace]
+resolver = "3"
+members = [
+    "crates/kitsunebi-domain",
+    "crates/kitsunebi-application",
+    "crates/kitsunebi-storage",
+    "crates/kitsunebi-gameap",
+    "crates/kitsunebi-tcpshield",
+    "crates/kitsunebi-artifacts",
+    "crates/kitsunebi-backup",
+    "crates/kitsunebi-monitoring",
+    "crates/kitsunebi-api",
+    "crates/kitsunebi-controller",
+    "crates/kitsunebi-cli",
+]
+
+[workspace.package]
+version = "0.3.0"
 edition = "2024"
-description = "Operational tooling for MCPlayNetwork Minecraft instances"
 license = "MIT"
+publish = false
 
-[lib]
-name = "kitsunebi_core"
-path = "src/lib.rs"
+[workspace.dependencies]
+kitsunebi-domain = { path = "crates/kitsunebi-domain" }
+kitsunebi-application = { path = "crates/kitsunebi-application" }
+kitsunebi-storage = { path = "crates/kitsunebi-storage" }
+kitsunebi-gameap = { path = "crates/kitsunebi-gameap" }
+kitsunebi-tcpshield = { path = "crates/kitsunebi-tcpshield" }
+kitsunebi-artifacts = { path = "crates/kitsunebi-artifacts" }
+kitsunebi-backup = { path = "crates/kitsunebi-backup" }
+kitsunebi-api = { path = "crates/kitsunebi-api" }
 
-[[bin]]
-name = "kitsunebi"
-path = "src/main.rs"
+[workspace.lints.rust]
+unsafe_code = "forbid"
+warnings = "warn"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"

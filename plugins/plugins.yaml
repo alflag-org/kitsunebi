@@ -1,9 +1,0 @@
-plugin_sets:
-  backend-common:
-    - luckperms
-
-plugins:
-  luckperms:
-    source: manual
-    file: plugins/manual/backend-vanilla-1/LuckPerms.jar
-    sha256: replace-with-real-sha256

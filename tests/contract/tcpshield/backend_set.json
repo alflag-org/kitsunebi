@@ -1,0 +1,10 @@
+{
+  "id": 42,
+  "name": "Production",
+  "backends": ["203.0.113.11:25565", "203.0.113.10:25565"],
+  "proxy_protocol": true,
+  "vulcan_ac_enabled": false,
+  "load_balancing_mode": 0,
+  "updated_at": "2026-08-31T00:00:00Z",
+  "created_at": "2026-08-30T00:00:00Z"
+}

@@ -1,6 +1,0 @@
-name: backend-vanilla-1
-role: backend
-runtime: systemd-java
-live_tree: /srv/kitsunebi/instances/backend-vanilla-1/data
-managed_config_dir: configs
-manual_plugin_dir: plugins

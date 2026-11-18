@@ -1,0 +1,25 @@
+[package]
+name = "kitsunebi-storage"
+description = "Persistence adapters for Kitsunebi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kitsunebi-application.workspace = true
+kitsunebi-domain.workspace = true
+async-trait = "0.1"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.8", default-features = false, features = ["mysql", "runtime-tokio", "tls-rustls", "migrate", "macros", "json", "uuid", "time"] }
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "macros"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "mysql-migrations"
+path = "../../tests/migrations/mysql.rs"

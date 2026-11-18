@@ -1,0 +1,567 @@
+openapi: 3.1.0
+info:
+  title: GameAP API
+  version: v4
+  description: |
+    GameAP v4 API for game server management.
+
+    ## Authentication
+
+    The API supports three authentication methods:
+
+    ### Bearer Token (JWT/PASETO)
+    Obtained from `POST /api/auth/login`. Valid for 24 hours (or 7 days with `remember_me`).
+    Tokens can be revoked early via `POST /api/auth/logout`.
+    ```
+    Authorization: Bearer eyJhbG...
+    ```
+
+    ### Personal Access Token (PAT)
+    Created via `POST /api/tokens`. Format: `{token_id}|{token_secret}`.
+    PATs can have limited abilities (permissions).
+    ```
+    Authorization: Bearer 42|abc123...xyz
+    ```
+
+    ## Response Format
+
+    ### Success Response
+    ```json
+    {
+      "status": "ok"
+    }
+    ```
+
+    ### Error Response
+    ```json
+    {
+      "status": "error",
+      "error": "Error message",
+      "message": "Error message",
+      "http_code": 422
+    }
+    ```
+
+    ### Paginated Response
+    ```json
+    {
+      "current_page": 1,
+      "data": [...],
+      "from": 1,
+      "last_page": 5,
+      "per_page": 15,
+      "total": 75
+    }
+    ```
+
+    ## Request correlation
+
+    Every HTTP response carries an `X-Request-Id` header — a per-request
+    correlation ID. If the client sends an `X-Request-Id` request header
+    with a short, safe value (≤ 64 chars, `[A-Za-z0-9._-]`) it is echoed
+    back; otherwise the server generates one. The same ID appears in the
+    server-side structured audit log, so a client can quote it when
+    reporting an issue.
+
+    ## WebSocket endpoints
+
+    OpenAPI does not natively model WebSocket flows; this section documents
+    them informally. WS endpoints take the token via the `?token=` query
+    parameter (the browser does not allow setting headers on a WebSocket
+    upgrade). Mint a **single-use, short-lived** token with
+    `POST /api/auth/short-lived-token` and use that — never a long-lived
+    token — in the URL, so the credential cannot be replayed from proxy
+    logs or browser history. Fetch a fresh one before every (re)connection.
+    A long-lived Bearer/PAT is still accepted for non-browser clients.
+    Outbound frames are JSON
+    `{"type": string, "payload": any, "ts": int64}` envelopes.
+
+    ### `/api/ws/nodes/metrics` (admin only)
+
+    Live metrics for **all enabled nodes**, multiplexed over a single
+    socket. No replay is sent. Each `metrics` envelope's
+    `payload.common_labels.node_id` identifies the source node.
+
+    Frames:
+    - `metrics.replay.done` — emitted once at start, before live samples.
+    - `metrics` — payload is `MetricsWireResponse`.
+    - `metrics.error` — payload is `{ "error": string }`.
+
+    ### `/api/ws/nodes/{id}/metrics` (admin only)
+
+    Per-node stream with 30-minute replay history. Used by the node
+    details modal for sparkline charts.
+
+    Frames: `metrics.replay` (array of `MetricsWireResponse`),
+    `metrics.replay.done`, `metrics`, `metrics.error`.
+
+    ### `/api/ws/servers/{server}/metrics`
+
+    Per-server stream filtered to envelopes carrying the matching
+    `server_id` label, plus machine-level series. Same frame protocol as
+    the per-node endpoint.
+
+    ### `/api/ws/tasks/{id}`
+
+    Live status stream for a single daemon task. Used by the task
+    progress drawer in the panel UI. The server emits frames; the
+    client only sends pings.
+
+    Outbound frames (server → client):
+    - `task.status` — payload describes the current task state. Fields
+      include `task_id`, `status` (one of `waiting`, `working`,
+      `success`, `error`, `canceled`), and optionally `server_id` /
+      `progress`.
+    - `task.output` — payload `{ task_id, chunk, is_final }`. Streamed
+      as the task writes stdout/stderr.
+    - `task.complete` — emitted once when the task reaches a terminal
+      state. Payload `{ task_id, status }`. The server may close the
+      socket immediately afterwards.
+
+    ### `/api/ws/servers/{server}/console`
+
+    Bidirectional console stream for a server. Replays the buffered
+    console history on connect, then streams new lines.
+
+    Inbound frames (client → server):
+    - `console.command` — payload `{ command: string }`. Forwarded to
+      the daemon to execute against the server's interactive shell.
+      Requires the `console` ability on the server.
+
+    Outbound frames (server → client):
+    - `console.history` — sent once at connect time. Payload
+      `{ output: string }` with the buffered console contents (may be
+      empty).
+    - `console.output` — payload `{ chunk: string }` (streamed).
+
+    Occurrences of the server RCON password are replaced with `******`
+    in every outbound frame.
+    - `error` — payload `{ message: string }` for authorization, daemon
+      connectivity, or RPC failures. The envelope's top-level `error`
+      field carries the same message. The server may close the socket
+      after sending an `error` frame.
+
+    ### `/api/ws/servers/{server}/attach`
+
+    Interactive PTY session for a server (raw shell attach). Used for
+    server installation flows and operator debugging. Requires the
+    `console` ability on the server (sending input also requires
+    `console.send`).
+
+    Inbound frames (client → server):
+    - `attach.input` — payload `{ data: bytes }`. Bytes sent to the PTY.
+    - `attach.detach` — empty payload. Detaches the client without
+      killing the underlying process.
+
+    Outbound frames (server → client):
+    - `attach.started` — payload `{ session_id, server_id }`. Sent
+      once after the daemon confirms attach.
+    - `attach.output` — payload `{ data: bytes }`. PTY output, streamed.
+    - `error` — same shape as the console endpoint.
+
+    Occurrences of the server RCON password are replaced with `******`
+    in every outbound frame.
+
+    ### `MetricsWireResponse` shape
+
+    ```json
+    {
+      "timestamp": "2026-04-27T15:30:45.123Z",
+      "common_labels": { "node_id": "1" },
+      "series": [
+        {
+          "name": "gameap_node_cpu_usage_percent",
+          "type": "gauge",
+          "unit": "percent",
+          "labels": {},
+          "points": [{
+            "timestamp": "2026-04-27T15:30:45.123Z",
+            "value": "47.2"
+          }]
+        },
+        {
+          "name": "gameap_node_network_receive_bytes_total",
+          "type": "counter",
+          "unit": "bytes",
+          "labels": { "interface": "eth0" },
+          "points": [{
+            "timestamp": "2026-04-27T15:30:45.123Z",
+            "value": "1623771160"
+          }]
+        },
+        {
+          "name": "gameap_node_disk_usage_percent",
+          "type": "gauge",
+          "unit": "percent",
+          "labels": { "mount": "/" },
+          "points": [{
+            "timestamp": "2026-04-27T15:30:45.123Z",
+            "value": "6.13"
+          }]
+        }
+      ],
+      "actual_window_seconds": 0
+    }
+    ```
+
+    Series with the same `name` may repeat with different `labels` (e.g.
+    one `gameap_node_network_receive_bytes_total` per interface,
+    one `gameap_node_disk_usage_percent` per mount). Currently emitted
+    metric names include:
+    `gameap_node_cpu_usage_percent`,
+    `gameap_node_memory_usage_percent`,
+    `gameap_node_memory_usage_bytes`,
+    `gameap_node_memory_total_bytes`,
+    `gameap_node_swap_usage_bytes`,
+    `gameap_node_swap_total_bytes`,
+    `gameap_node_disk_usage_percent` (label `mount`),
+    `gameap_node_disk_usage_bytes` (label `mount`),
+    `gameap_node_disk_total_bytes` (label `mount`),
+    `gameap_node_network_receive_bytes_total` (label `interface`),
+    `gameap_node_network_transmit_bytes_total` (label `interface`),
+    `gameap_node_load1`, `gameap_node_load5`, `gameap_node_load15`,
+    `gameap_node_uptime_seconds_total`.
+
+    See `schemas/responses/MetricsWireResponse.yaml` for the JSON schema.
+  contact:
+    name: GameAP
+    url: https://gameap.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /
+    description: Relative URL
+
+tags:
+  - name: Health
+    description: Health check and status
+  - name: Config
+    description: Public configuration
+  - name: Auth
+    description: Authentication
+  - name: User
+    description: Current user information
+  - name: Profile
+    description: User profile management
+  - name: Tokens
+    description: Personal Access Tokens management
+  - name: Servers
+    description: Game server management
+  - name: ServerControl
+    description: Server start/stop/restart/update operations
+  - name: ServerConsole
+    description: Server console access
+  - name: ServerRcon
+    description: RCON commands and player management
+  - name: ServerTasks
+    description: Scheduled server tasks
+  - name: ServerSettings
+    description: Server settings management
+  - name: FileManager
+    description: Server file operations
+  - name: Users
+    description: User management (Admin)
+  - name: Nodes
+    description: Node/Dedicated server management (Admin)
+  - name: Games
+    description: Game management (Admin)
+  - name: GameMods
+    description: Game modification management (Admin)
+  - name: DaemonTasks
+    description: Daemon task monitoring (Admin)
+  - name: ClientCertificates
+    description: Client certificate management (Admin)
+  - name: PluginStore
+    description: Plugin store (Admin)
+  - name: DaemonSetup
+    description: Daemon node setup
+  - name: DaemonAPI
+    description: Daemon-to-API communication
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT or PASETO token obtained from /api/auth/login
+
+    personalAccessToken:
+      type: http
+      scheme: bearer
+      description: Personal Access Token in format {id}|{token}
+
+  schemas:
+    $ref: './schemas/_index.yaml'
+
+  parameters:
+    $ref: './parameters/_index.yaml'
+
+security:
+  - bearerAuth: []
+  - personalAccessToken: []
+
+paths:
+  # Health & Config
+  /api/health:
+    $ref: './paths/health.yaml#/~1api~1health'
+  /api/config/public:
+    $ref: './paths/config.yaml#/~1api~1config~1public'
+
+  # Auth
+  /api/auth/login:
+    $ref: './paths/auth.yaml#/~1api~1auth~1login'
+  /api/auth/logout:
+    $ref: './paths/auth.yaml#/~1api~1auth~1logout'
+  /api/auth/short-lived-token:
+    $ref: './paths/auth.yaml#/~1api~1auth~1short-lived-token'
+  /api/auth/2fa/verify:
+    $ref: './paths/auth.yaml#/~1api~1auth~12fa~1verify'
+
+  # User & Profile
+  /api/user:
+    $ref: './paths/user.yaml#/~1api~1user'
+  /api/profile:
+    $ref: './paths/profile.yaml#/~1api~1profile'
+  /api/profile/2fa/setup:
+    $ref: './paths/profile-twofactor.yaml#/~1api~1profile~12fa~1setup'
+  /api/profile/2fa/confirm:
+    $ref: './paths/profile-twofactor.yaml#/~1api~1profile~12fa~1confirm'
+  /api/profile/2fa:
+    $ref: './paths/profile-twofactor.yaml#/~1api~1profile~12fa'
+  /api/profile/2fa/recovery-codes:
+    $ref: './paths/profile-twofactor.yaml#/~1api~1profile~12fa~1recovery-codes'
+  /api/profile/2fa/snooze:
+    $ref: './paths/profile-twofactor.yaml#/~1api~1profile~12fa~1snooze'
+
+  # Tokens
+  /api/tokens:
+    $ref: './paths/tokens.yaml#/~1api~1tokens'
+  /api/tokens/{id}:
+    $ref: './paths/tokens.yaml#/~1api~1tokens~1{id}'
+  /api/tokens/abilities:
+    $ref: './paths/tokens.yaml#/~1api~1tokens~1abilities'
+
+  # Servers
+  /api/servers:
+    $ref: './paths/servers.yaml#/~1api~1servers'
+  /api/servers/summary:
+    $ref: './paths/servers.yaml#/~1api~1servers~1summary'
+  /api/servers/search:
+    $ref: './paths/servers.yaml#/~1api~1servers~1search'
+  /api/servers/{id}:
+    $ref: './paths/servers.yaml#/~1api~1servers~1{id}'
+  /api/servers/{server}/abilities:
+    $ref: './paths/servers-abilities.yaml#/~1api~1servers~1{server}~1abilities'
+  /api/servers/{server}/status:
+    $ref: './paths/servers.yaml#/~1api~1servers~1{server}~1status'
+  /api/servers/{server}/query:
+    $ref: './paths/servers.yaml#/~1api~1servers~1{server}~1query'
+  /api/user/servers_abilities:
+    $ref: './paths/servers-abilities.yaml#/~1api~1user~1servers_abilities'
+
+  # Server Control
+  /api/servers/{server}/start:
+    $ref: './paths/servers-control.yaml#/~1api~1servers~1{server}~1start'
+  /api/servers/{server}/stop:
+    $ref: './paths/servers-control.yaml#/~1api~1servers~1{server}~1stop'
+  /api/servers/{server}/restart:
+    $ref: './paths/servers-control.yaml#/~1api~1servers~1{server}~1restart'
+  /api/servers/{server}/update:
+    $ref: './paths/servers-control.yaml#/~1api~1servers~1{server}~1update'
+  /api/servers/{server}/install:
+    $ref: './paths/servers-control.yaml#/~1api~1servers~1{server}~1install'
+  /api/servers/{server}/reinstall:
+    $ref: './paths/servers-control.yaml#/~1api~1servers~1{server}~1reinstall'
+
+  # Server Console
+  /api/servers/{server}/console:
+    $ref: './paths/servers-console.yaml#/~1api~1servers~1{server}~1console'
+
+  # Server RCON
+  /api/servers/{server}/rcon:
+    $ref: './paths/servers-rcon.yaml#/~1api~1servers~1{server}~1rcon'
+  /api/servers/{server}/rcon/features:
+    $ref: './paths/servers-rcon.yaml#/~1api~1servers~1{server}~1rcon~1features'
+  /api/servers/{server}/rcon/fast_rcon:
+    $ref: './paths/servers-rcon.yaml#/~1api~1servers~1{server}~1rcon~1fast_rcon'
+  /api/servers/{server}/rcon/players:
+    $ref: './paths/servers-rcon.yaml#/~1api~1servers~1{server}~1rcon~1players'
+  /api/servers/{server}/rcon/players/message:
+    $ref: './paths/servers-rcon.yaml#/~1api~1servers~1{server}~1rcon~1players~1message'
+  /api/servers/{server}/rcon/players/{command}:
+    $ref: './paths/servers-rcon.yaml#/~1api~1servers~1{server}~1rcon~1players~1{command}'
+
+  # Server Tasks
+  /api/servers/{server}/tasks:
+    $ref: './paths/servers-tasks.yaml#/~1api~1servers~1{server}~1tasks'
+  /api/servers/{server}/tasks/{id}:
+    $ref: './paths/servers-tasks.yaml#/~1api~1servers~1{server}~1tasks~1{id}'
+  /api/servers/{server}/tasks/{id}/executions:
+    $ref: './paths/servers-tasks.yaml#/~1api~1servers~1{server}~1tasks~1{id}~1executions'
+
+  # Server Settings
+  /api/servers/{server}/settings:
+    $ref: './paths/servers-settings.yaml#/~1api~1servers~1{server}~1settings'
+
+  # File Manager
+  /api/file-manager/{server}/initialize:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1initialize'
+  /api/file-manager/{server}/content:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1content'
+  /api/file-manager/{server}/tree:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1tree'
+  /api/file-manager/{server}/delete:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1delete'
+  /api/file-manager/{server}/upload:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1upload'
+  /api/file-manager/{server}/upload/sessions:
+    $ref: './paths/file-manager-upload-sessions.yaml#/~1api~1file-manager~1{server}~1upload~1sessions'
+  /api/file-manager/{server}/upload/sessions/{uploadID}:
+    $ref: './paths/file-manager-upload-sessions.yaml#/~1api~1file-manager~1{server}~1upload~1sessions~1{uploadID}'
+  /api/file-manager/{server}/upload/sessions/{uploadID}/chunks/{index}:
+    $ref: './paths/file-manager-upload-sessions.yaml#/~1api~1file-manager~1{server}~1upload~1sessions~1{uploadID}~1chunks~1{index}'
+  /api/file-manager/{server}/upload/sessions/{uploadID}/complete:
+    $ref: './paths/file-manager-upload-sessions.yaml#/~1api~1file-manager~1{server}~1upload~1sessions~1{uploadID}~1complete'
+  /api/file-manager/{server}/update-file:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1update-file'
+  /api/file-manager/{server}/download:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1download'
+  /api/file-manager/{server}/download-archive:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1download-archive'
+  /api/file-manager/{server}/rename:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1rename'
+  /api/file-manager/{server}/chmod:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1chmod'
+  /api/file-manager/{server}/create-directory:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1create-directory'
+  /api/file-manager/{server}/create-file:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1create-file'
+  /api/file-manager/{server}/stream-file:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1stream-file'
+  /api/file-manager/{server}/paste:
+    $ref: './paths/file-manager.yaml#/~1api~1file-manager~1{server}~1paste'
+
+  # Users (Admin)
+  /api/users:
+    $ref: './paths/users.yaml#/~1api~1users'
+  /api/users/{id}:
+    $ref: './paths/users.yaml#/~1api~1users~1{id}'
+  /api/users/{id}/servers:
+    $ref: './paths/users.yaml#/~1api~1users~1{id}~1servers'
+  /api/users/{id}/servers/{server}/permissions:
+    $ref: './paths/users.yaml#/~1api~1users~1{id}~1servers~1{server}~1permissions'
+
+  # Nodes / Dedicated Servers (Admin)
+  /api/nodes:
+    $ref: './paths/nodes.yaml#/~1api~1nodes'
+  /api/nodes/summary:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1summary'
+  /api/nodes/setup:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1setup'
+  /api/nodes/certificates.zip:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1certificates.zip'
+  /api/nodes/{id}:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1{id}'
+  /api/nodes/{node}/busy_ports:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1{node}~1busy_ports'
+  /api/nodes/{node}/ip_list:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1{node}~1ip_list'
+  /api/nodes/{id}/daemon:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1{id}~1daemon'
+  /api/nodes/{id}/logs.zip:
+    $ref: './paths/nodes.yaml#/~1api~1nodes~1{id}~1logs.zip'
+  /api/nodes/setup-key:
+    $ref: './paths/nodes-setup-key.yaml#/~1api~1nodes~1setup-key'
+  /api/dedicated_servers:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers'
+  /api/dedicated_servers/summary:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1summary'
+  /api/dedicated_servers/setup:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1setup'
+  /api/dedicated_servers/certificates.zip:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1certificates.zip'
+  /api/dedicated_servers/{id}:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1{id}'
+  /api/dedicated_servers/{node}/busy_ports:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1{node}~1busy_ports'
+  /api/dedicated_servers/{node}/ip_list:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1{node}~1ip_list'
+  /api/dedicated_servers/{id}/daemon:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1{id}~1daemon'
+  /api/dedicated_servers/{id}/logs.zip:
+    $ref: './paths/nodes.yaml#/~1api~1dedicated_servers~1{id}~1logs.zip'
+
+  # Games (Admin)
+  /api/games:
+    $ref: './paths/games.yaml#/~1api~1games'
+  /api/games/upgrade:
+    $ref: './paths/games.yaml#/~1api~1games~1upgrade'
+  /api/games/import/pelican-egg:
+    $ref: './paths/games.yaml#/~1api~1games~1import~1pelican-egg'
+  /api/games/{code}:
+    $ref: './paths/games.yaml#/~1api~1games~1{code}'
+  /api/games/{code}/mods:
+    $ref: './paths/games.yaml#/~1api~1games~1{code}~1mods'
+
+  # Game Mods (Admin)
+  /api/game_mods:
+    $ref: './paths/game-mods.yaml#/~1api~1game_mods'
+  /api/game_mods/get_list_for_game/{game}:
+    $ref: './paths/game-mods.yaml#/~1api~1game_mods~1get_list_for_game~1{game}'
+  /api/game_mods/{id}:
+    $ref: './paths/game-mods.yaml#/~1api~1game_mods~1{id}'
+
+  # Daemon Tasks (Admin)
+  /api/gdaemon_tasks:
+    $ref: './paths/daemon-tasks.yaml#/~1api~1gdaemon_tasks'
+  /api/gdaemon_tasks/{id}:
+    $ref: './paths/daemon-tasks.yaml#/~1api~1gdaemon_tasks~1{id}'
+  /api/gdaemon_tasks/{id}/output:
+    $ref: './paths/daemon-tasks.yaml#/~1api~1gdaemon_tasks~1{id}~1output'
+  /api/gdaemon_tasks/{id}/cancel:
+    $ref: './paths/daemon-tasks.yaml#/~1api~1gdaemon_tasks~1{id}~1cancel'
+
+  # Client Certificates (Admin)
+  /api/client_certificates:
+    $ref: './paths/client-certificates.yaml#/~1api~1client_certificates'
+  /api/client_certificates/{id}:
+    $ref: './paths/client-certificates.yaml#/~1api~1client_certificates~1{id}'
+
+  # Plugin Store (Admin)
+  /api/plugin-store/categories:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1categories'
+  /api/plugin-store/labels:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1labels'
+  /api/plugin-store/plugins:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1plugins'
+  /api/plugin-store/plugins/{id}:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1plugins~1{id}'
+  /api/plugin-store/plugins/{id}/versions:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1plugins~1{id}~1versions'
+  /api/plugin-store/plugins/{id}/icon:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1plugins~1{id}~1icon'
+  /api/plugin-store/plugins/{id}/install:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1plugins~1{id}~1install'
+  /api/plugin-store/plugins/{id}/update:
+    $ref: './paths/plugin-store.yaml#/~1api~1plugin-store~1plugins~1{id}~1update'
+
+  # Admin Plugins
+  /api/admin/plugins/upload/dry-run:
+    $ref: './paths/admin-plugins.yaml#/~1api~1admin~1plugins~1upload~1dry-run'
+  /api/admin/plugins/upload/install:
+    $ref: './paths/admin-plugins.yaml#/~1api~1admin~1plugins~1upload~1install'
+  /api/admin/plugins/loaded:
+    $ref: './paths/admin-plugins.yaml#/~1api~1admin~1plugins~1loaded'
+  /api/admin/plugins/{id}:
+    $ref: './paths/admin-plugins.yaml#/~1api~1admin~1plugins~1{id}'
+
+  # Admin Let's Encrypt
+  /api/admin/letsencrypt/status:
+    $ref: './paths/admin-letsencrypt.yaml#/~1api~1admin~1letsencrypt~1status'
+
+  # Daemon Enrollment
+  /nodes/setup/{key}:
+    $ref: './paths/nodes-enrollment-script.yaml#/~1nodes~1setup~1{key}'

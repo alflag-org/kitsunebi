@@ -72,6 +72,7 @@ function request(state: MockState, suffix: string, method = 'POST'): CapturedReq
 async function openChangeSession(page: Page): Promise<void> {
   await page.goto('/change-sessions');
   await expect(page.getByRole('heading', { name: 'Change sessions' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review operation' })).toBeEnabled();
   await page.getByText('Advanced changes and recovery', { exact: true }).click();
   await page.getByLabel('Service').first().selectOption(service);
   await page.getByLabel('Cluster').first().selectOption(cluster);
@@ -150,6 +151,7 @@ test('does not advance after a stale plan response', async ({ page }) => {
 test('allows explicit rollback for an aborted session with persisted operation evidence', async ({ page }) => {
   const state = installMock(page, { aborted: true });
   await page.goto('/change-sessions');
+  await expect(page.getByRole('button', { name: 'Review operation' })).toBeEnabled();
   await page.getByText('Advanced changes and recovery', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Smoke session', exact: true })).toBeVisible();
   await expect(page.getByText(`Operation ${operationId}`)).toBeVisible();

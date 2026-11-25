@@ -40,8 +40,7 @@
   }
 </script>
 
-<section class="files-workspace" aria-labelledby="files-title">
-  <div class="change-intro"><div><p class="eyebrow">Brokered file observations</p><h2 id="files-title">Files &amp; diff</h2><p>Browse and inspect through Kitsunebi. File changes are staged in a typed ChangePlan; unknown files are never removed automatically.</p></div><span class="endpoint-label">/api/v1/execution-units/&#123;id&#125;/files</span></div>
+<section class="files-workspace" aria-label="Execution unit files">
   {#if unsupported}<div class="state-message info" role="status"><span class="state-mark">·</span><div><strong>File operations disabled by API capability</strong><span>The controller does not expose file access for this scope.</span></div></div>{/if}
   <div class="file-toolbar"><label>Execution Unit<select value={unitId} onchange={unitChanged}><option value="">Select a target</option>{#each units as item}<option value={String(item.id)}>{resourceLabel(item)}</option>{/each}</select></label><label>Browse path<input bind:value={path} placeholder="." autocomplete="off" /></label><button class="quiet" onclick={browse} disabled={browseLoading || !unitId || unsupported}>{browseLoading ? 'Browsing…' : 'Browse'}</button></div>
   {#if error}<div class="state-message error" role="alert"><span class="state-mark">!</span><div><strong>{unsupported ? 'File capability unavailable' : 'File operation failed'}</strong><span>{error}</span></div></div>{/if}{#if notice}<div class="state-message success" role="status"><span class="state-mark">✓</span><div><strong>Operation observed</strong><span>{notice}</span></div></div>{/if}{#if !csrfAvailable}<div class="state-message info"><span class="state-mark">·</span><div><strong>Writes disabled</strong><span>No same-origin CSRF header is available in this session. Browse, read, diff, and download remain available.</span></div></div>{/if}

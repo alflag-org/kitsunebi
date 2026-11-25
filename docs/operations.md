@@ -1,5 +1,13 @@
 # Operations
 
+## Find a service
+
+The dashboard lists services by display name and current cluster. Select a
+lifecycle to filter the directory, or search by service name, key or cluster
+name. Open a service to inspect its configuration. **View execution units**
+lists the targets assigned to that service. Select a row to use that target in
+the lifecycle form. Switching targets discards the previous confirmation.
+
 ## Routine lifecycle operations
 
 In Execution units or Change sessions, choose the named target and Start,

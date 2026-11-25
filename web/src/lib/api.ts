@@ -229,7 +229,7 @@ export function resourceValue(resource: JsonObject, ...keys: string[]): unknown 
 }
 
 export function resourceLabel(resource: JsonObject): string {
-  return String(resourceValue(resource, 'name', 'title', 'label', 'id') ?? 'Unnamed record');
+  return String(resourceValue(resource, 'display_name', 'name', 'title', 'label', 'key', 'id') ?? 'Unnamed record');
 }
 
 /** Return true only when a binding carries enough persisted scope to match both selectors. */

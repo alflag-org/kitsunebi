@@ -176,6 +176,9 @@ describe('resource state helpers', () => {
   });
 
   it('keeps stopped on-demand services neutral and marks explicit failure states', () => {
+    expect(stateTone('unknown')).toBe('neutral');
+    expect(stateTone('inactive')).toBe('neutral');
+    expect(stateTone('unready')).toBe('bad');
     expect(stateTone('stopped')).toBe('neutral');
     expect(stateTone('failed')).toBe('bad');
     expect(stateTone('accepting')).toBe('good');

@@ -144,9 +144,8 @@
 </script>
 
 <LifecyclePanel units={bindings} {csrfToken} />
-<details><summary>Advanced changes and recovery</summary>
-<section class="change-workspace" aria-labelledby="change-title">
-  <div class="change-intro"><div><p class="eyebrow">Persisted Change Session</p><h2 id="change-title">Observe → plan → approve → apply → verify → accept</h2><p>Every write becomes one closed typed step. Provider identifiers, state hashes, backup references, and staged bytes are recorded before apply.</p></div><span class="endpoint-label">/api/v1/change-sessions</span></div>
+<details class="advanced-changes"><summary>Advanced changes and recovery</summary>
+<section class="change-workspace" aria-label="Advanced changes and recovery">
   {#if loading}<div class="state-message loading"><span class="state-mark">…</span><div><strong>Loading change sessions…</strong><span>Reading the controller record before enabling operations.</span></div></div>
   {:else if error}<div class="state-message error"><span class="state-mark">!</span><div><strong>{unsupported ? 'Change capability unavailable' : 'Change sessions unavailable'}</strong><span>{error}</span></div></div>
   {:else}

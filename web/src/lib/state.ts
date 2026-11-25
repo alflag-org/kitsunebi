@@ -26,9 +26,9 @@ export function isOfflineError(error?: ApiError): boolean {
 
 export function stateTone(value: unknown): StateTone {
   const text = String(value ?? '').trim().toLowerCase();
-  if (/fail|error|offline|unhealthy|degraded/.test(text)) return 'bad';
-  if (/warn|pending|unknown|maintenance|draining/.test(text)) return 'warn';
-  if (/active|ready|accept|running|healthy|verified|in sync|synced|ok/.test(text)) return 'good';
+  if (/fail|error|offline|unhealthy|unready|unreachable|degraded/.test(text)) return 'bad';
+  if (/warn|pending|maintenance|draining/.test(text)) return 'warn';
+  if (/^(active|ready|accepted|accepting|running|healthy|verified|in sync|synced|ok)$/.test(text)) return 'good';
   return 'neutral';
 }
 

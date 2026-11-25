@@ -128,7 +128,7 @@ test('stages a typed file plan through verified acceptance and protects classifi
   await page.getByRole('button', { name: 'Accept', exact: true }).click();
   await expect(page.getByText(/Operation .* is now accepted/)).toBeVisible();
 
-  await page.getByRole('button', { name: /Files/ }).click();
+  await page.getByRole('link', { name: 'Files', exact: true }).click();
   await page.getByRole('button', { name: 'Browse', exact: true }).click();
   await page.getByRole('button', { name: /secret\.properties/ }).click();
   await expect(page.getByText(/Secret metadata is protected/)).toBeVisible();

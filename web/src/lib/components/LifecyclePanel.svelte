@@ -1,15 +1,18 @@
 <script lang="ts">
+  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+  import Power from '@lucide/svelte/icons/power';
+  import { surfacePath } from '../navigation';
   import { api, resourceLabel } from '../api';
   import type { JsonObject, Operation } from '../types';
   export let units: JsonObject[] = [];
   export let csrfToken = '';
   type Preview = { session_id: string; plan_id: string; plan_hash: string; action: string; target_name: string; running: boolean; impact: string; expires_at: number };
-  let unit = '';
+  export let unit = '';
   let action = 'restart';
   let preview: Preview | undefined;
   let result: Operation | undefined;
   let key = '';
-  let busy = false;
+  export let busy = false;
   let error = '';
   $: if (!units.some((value) => String(value.id) === unit)) { unit = String(units[0]?.id ?? ''); preview = undefined; }
   function reset() { preview = undefined; result = undefined; error = ''; }
@@ -36,17 +39,17 @@
   }
 </script>
 
-<section class="panel" aria-labelledby="lifecycle-title">
-  <h2 id="lifecycle-title">Start, stop or restart</h2>
+<section class="panel lifecycle-panel" aria-labelledby="lifecycle-title">
+  <div class="section-title"><Power size={18} /><h2 id="lifecycle-title">Start, stop or restart</h2></div>
   <div class="file-toolbar">
-    <label>Target<select bind:value={unit} onchange={reset} disabled={busy}>{#each units as item}<option value={String(item.id)}>{resourceLabel(item)}</option>{/each}</select></label>
-    <label>Operation<select bind:value={action} onchange={reset} disabled={busy}><option value="start">Start</option><option value="stop">Stop</option><option value="restart">Restart</option></select></label>
-    <button class="quiet" onclick={prepare} disabled={busy || !unit || !csrfToken}>Review operation</button>
+    <div class="form-field"><label for="lifecycle-target">Target</label><select id="lifecycle-target" bind:value={unit} onchange={reset} disabled={busy}>{#each units as item}<option value={String(item.id)}>{resourceLabel(item)}</option>{/each}</select></div>
+    <div class="form-field"><label for="lifecycle-action">Operation</label><select id="lifecycle-action" bind:value={action} onchange={reset} disabled={busy}><option value="start">Start</option><option value="stop">Stop</option><option value="restart">Restart</option></select></div>
+    <button class="primary" onclick={prepare} disabled={busy || !unit || !csrfToken}><ClipboardCheck size={16} />Review operation</button>
   </div>
   {#if preview && !result}
     <div class="panel-head"><div><h3>{preview.target_name}</h3><p>Currently {preview.running ? 'running' : 'stopped'}. {preview.impact}</p></div></div>
     <button class="primary" onclick={execute} disabled={busy || Date.now() >= preview.expires_at * 1000}>{busy ? 'Executing…' : `Confirm ${preview.action}`}</button>
   {/if}
-  {#if result}<p role="status">Operation {result.status === 'accepted' ? 'completed and verified' : result.status}.</p><p>View the recorded evidence in Operations.</p>{/if}
+  {#if result}<p role="status">Operation {result.status === 'accepted' ? 'completed and verified' : result.status}.</p><a class="rail-link" href={surfacePath('Operations')}>View operation history →</a>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
 </section>

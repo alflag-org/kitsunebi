@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { resourceLabel, resourceValue } from '../api';
+  import { resourceValue } from '../api';
   import { safeDisplay } from '../state';
   import type { JsonObject } from '../types';
   export let resource: JsonObject | undefined;
   export let title: string;
+  export let backHref = '';
   export let endpoint = '';
   export let loading = false;
   export let error = '';
@@ -13,7 +14,7 @@
 </script>
 
 <section class="panel detail-panel" aria-labelledby="detail-title">
-  <div class="panel-head"><div><button class="back-link" onclick={onBack}>← Back to list</button><h2 id="detail-title">{title}</h2>{#if resource}<p>{resourceLabel(resource)} · {resource.id}</p>{/if}</div><span class="endpoint-label">{endpoint}</span></div>
+  <div class="panel-head"><div>{#if backHref}<a class="back-link" href={backHref}>← All services</a>{:else}<button class="back-link" onclick={onBack}>Close details</button>{/if}<h2 id="detail-title">{title}</h2>{#if resource}<p>{resource.id}</p>{/if}</div><span class="endpoint-label">{endpoint}</span></div>
   {#if loading}<div class="detail-loading"><span class="skeleton-line"></span><span class="skeleton-line"></span><span class="skeleton-line short"></span></div>
   {:else if error}<div class="list-state"><div class="state-message error"><span class="state-mark">!</span><div><strong>{unsupported ? 'Capability unavailable' : 'Unable to load detail'}</strong><span>{error}</span></div></div></div>
   {:else if resource}<dl class="detail-grid">{#each [...priority.filter((key) => resource[key] !== undefined), ...Object.keys(resource).filter((key) => !priority.includes(key) && key !== 'id')] as key}<div><dt>{key.replaceAll('_', ' ')}</dt><dd>{safeDisplay(key, resourceValue(resource, key))}</dd></div>{/each}</dl>

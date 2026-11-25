@@ -27,3 +27,12 @@ export function surfaceFromPath(path: string | undefined): Surface {
   const entry = routeSurfaces.find(([slug]) => slug === (path ?? '').split('/')[0]);
   return entry?.[1] ?? 'Dashboard';
 }
+
+export function surfacePath(surface: Surface): string {
+  const entry = routeSurfaces.find(([, name]) => name === surface);
+  return entry ? `/${entry[0]}` : '/';
+}
+
+export function servicePath(id: string): string {
+  return `${surfacePath('Service detail')}?id=${encodeURIComponent(id)}`;
+}
